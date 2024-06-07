@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 
 import javax.mail.MessagingException;
 import java.io.UnsupportedEncodingException;
+import java.util.Optional;
 
 public interface UserService {
 
@@ -25,5 +26,6 @@ public interface UserService {
 	ResponseEntity<BaseResponceDto> login(LoginDto user);
 
     void newPassword(String email, String password);
+    Optional<UserEntity> getCurrentUser();
 }
 

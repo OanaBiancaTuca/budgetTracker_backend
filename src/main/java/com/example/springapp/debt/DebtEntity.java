@@ -1,16 +1,10 @@
 package com.example.springapp.debt;
 
 import com.example.springapp.user.UserEntity;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
 
 @Entity
-//@Data
-//@AllArgsConstructor
-//@NoArgsConstructor
 public class DebtEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

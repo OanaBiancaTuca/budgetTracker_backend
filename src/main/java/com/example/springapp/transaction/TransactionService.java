@@ -13,10 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.example.springapp.category.CategoryService;
 import com.example.springapp.account.AccountService;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 
 @Service
 public class TransactionService {
@@ -128,5 +125,13 @@ public class TransactionService {
             transactionRepository.save(entity);
         }catch (Exception ignored){
         }
+    }
+    public List<Object[]> getTransactionForLastSixMonths(Integer userId){
+        Calendar calendar = Calendar.getInstance();
+        calendar.add(Calendar.MONTH, -6);
+        Date sixMonthsAgo = calendar.getTime();
+
+        // Fetch expenses from the repository
+        return transactionRepository.getLastSixMonthsIncome(userId, sixMonthsAgo);
     }
 }

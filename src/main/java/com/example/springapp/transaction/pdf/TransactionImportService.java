@@ -1,8 +1,6 @@
 package com.example.springapp.transaction.pdf;
 
 import com.example.springapp.transaction.Transaction;
-import com.itextpdf.text.pdf.PdfReader;
-import com.itextpdf.text.pdf.parser.PdfTextExtractor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;

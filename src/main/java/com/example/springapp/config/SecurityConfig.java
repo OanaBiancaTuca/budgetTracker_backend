@@ -25,22 +25,22 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.authentication.logout.LogoutHandler;
 import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
-
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
-	private JWTAuthEntryPoint authEntryPoint;
-    private CustomUserDetailsService userDetailsService;
+    private final JWTAuthEntryPoint authEntryPoint;
+    private final CustomUserDetailsService userDetailsService;
+
     @Autowired
-    private LogoutHandler logoutHandler; 
+    private LogoutHandler logoutHandler;
+
     @Autowired
     public SecurityConfig(CustomUserDetailsService userDetailsService, JWTAuthEntryPoint authEntryPoint) {
         this.userDetailsService = userDetailsService;
         this.authEntryPoint = authEntryPoint;
     }
-    
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http.cors().and()
@@ -52,26 +52,27 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 .and()
                 .authorizeRequests()
-                .antMatchers("/api/auth/**","/accounts","/budget","/goals","/api/send-verification-email").permitAll()
+                .antMatchers("/api/auth/**", "/accounts", "/budget", "/goals", "/api/send-verification-email").permitAll()
                 .anyRequest().authenticated()
                 .and()
                 .httpBasic();
+
         http.addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
-        	.logout()
-        	.logoutUrl("/api/logout")
-        	.addLogoutHandler(logoutHandler)
-        	.logoutSuccessHandler((request, response, authentication) -> SecurityContextHolder.clearContext());
+                .logout()
+                .logoutUrl("/api/logout")
+                .addLogoutHandler(logoutHandler)
+                .logoutSuccessHandler((request, response, authentication) -> SecurityContextHolder.clearContext());
+
         return http.build();
     }
 
     @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration authenticationConfiguration) throws Exception {
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
     }
 
     @Bean
-    PasswordEncoder passwordEncoder() {
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
@@ -82,27 +83,24 @@ public class SecurityConfig {
 
     @Bean
     public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurerAdapter() {
+        return new WebMvcConfigurer() {
             @Override
             public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/**").allowedOrigins("*").allowedMethods("GET", "POST","PUT", "DELETE");
-
-
+                registry.addMapping("/api/**")
+                        .allowedOrigins("http://localhost:8081")
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedHeaders("*")
+                        .allowCredentials(true);
             }
         };
     }
 
-
-
-
     private Connector redirectConnector() {
-
         var connector = new Connector("org.apache.coyote.http11.Http11NioProtocol");
         connector.setScheme("http");
         connector.setPort(8081);
         connector.setSecure(false);
         connector.setRedirectPort(8443);
-
         return connector;
     }
 }

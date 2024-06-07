@@ -2,28 +2,32 @@ package com.example.springapp.debt;
 
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import javax.transaction.Transactional;
-import java.util.List;
-import java.util.Objects;
+import java.time.LocalDate;
+import java.util.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.List;
 import java.util.stream.Collectors;
 @Transactional
 @Service
 public class DebtService {
 
-    @Autowired
-    private DebtRepo debtR;
-    @Autowired
+    private final DebtRepo debtR;
     UserRepository userRepository;
-    public DebtEntity debtCreate(DebtEntity deb,String uName) {
+    private final JavaMailSender mailSender;
+
+    public DebtService(DebtRepo debtR, UserRepository userRepository, JavaMailSender mailSender) {
+        this.debtR = debtR;
+        this.userRepository = userRepository;
+        this.mailSender = mailSender;
+    }
+
+    public DebtEntity debtCreate(DebtEntity deb, String uName) {
         try{
             UserEntity user = userRepository.findByEmail(uName).orElseThrow();
             deb.setUser(user);
@@ -35,7 +39,6 @@ public class DebtService {
 
     public DebtEntity debtUpdate(DebtEntity deb, Integer debtId) {
         DebtEntity debt = debtR.findById(debtId).get();
-
         if(!"0".equalsIgnoreCase(String.valueOf(deb.getAmount()))){
             debt.setAmount(deb.getAmount());
         }
@@ -66,8 +69,6 @@ public class DebtService {
                 return debtR.findAllByUserOrderByAmountDesc(user);
             } else if (value==2) {
                 List<DebtEntity> debts = debtR.findAllByUser(user);
-
-//                return  debtR.findAllByUserOrderByDueDateAsc(user);
                 return debts.stream()
                         .sorted(Comparator.comparing(debt -> parseDueDate(debt.getDueDate())))
                         .collect(Collectors.toList());
@@ -92,5 +93,41 @@ public class DebtService {
 
     public  DebtEntity debtGetId(Integer dId ){
         return debtR.findById(dId).get();
+    }
+    @Scheduled(cron = "0 30 9 * * ?")
+    // Rulează zilnic la ora 9:30 AM
+    public void checkDueDatesAndNotify() {
+        LocalDate today = LocalDate.now();
+        LocalDate twoDaysLater = today.plusDays(2);
+
+        List<DebtEntity> debts = debtR.findAll().stream()
+                .filter(debt -> {
+                    Date dueDate = parseDueDate(debt.getDueDate());
+                    return dueDate != null && !dueDate.before(java.sql.Date.valueOf(today)) && !dueDate.after(java.sql.Date.valueOf(twoDaysLater));
+                })
+                .collect(Collectors.toList());
+
+        for (DebtEntity debt : debts) {
+            UserEntity user = debt.getUser();
+            if (user != null && user.getEmail() != null) {
+                sendEmail(user.getEmail(), "Debt Due Soon", "Your debt of " + debt.getAmount() + " is due on " + debt.getDueDate() + ".");
+            }
+        }
+    }
+
+    public void sendEmail(String to, String subject, String body) {
+        SimpleMailMessage message = new SimpleMailMessage();
+        message.setTo(to);
+        message.setSubject(subject);
+        message.setText(body);
+        mailSender.send(message);
+    }
+
+    public void debtUpdate(Long id, String status, UserEntity user) {
+        DebtEntity debt = debtR.findById(user.getUserId()).get();
+        if(Objects.nonNull(status)){
+            debt.setStatus(status);
+        }
+       debtR.save(debt);
     }
 }
