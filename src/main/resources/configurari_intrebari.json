@@ -1,0 +1,9 @@
+{
+  "vizualizare obiective": "Comanda pentru vizualizarea obiectivelor a fost primită.",
+  "adaugare obiectiv": "Comanda pentru adăugarea unui obiectiv a fost primită. Te rog să specifici numele, suma și data țintă.",
+  "setare status obiectiv": "Comanda pentru setarea statusului unui obiectiv a fost primită. Te rog să specifici ID-ul obiectivului și noul status.",
+  "vizualizare datorii": "Comanda pentru vizualizarea datoriilor a fost primită.",
+  "adaugare datorie": "Comanda pentru adăugarea unei datorii a fost primită. Te rog să specifici descrierea, suma și data scadenței.",
+  "stergere datorie": "Comanda pentru ștergerea unei datorii a fost primită. Te rog să specifici ID-ul datoriei.",
+  "schimbare scadenta datorie": "Comanda pentru schimbarea scadenței unei datorii a fost primită. Te rog să specifici ID-ul datoriei și noua dată de scadență."
+}

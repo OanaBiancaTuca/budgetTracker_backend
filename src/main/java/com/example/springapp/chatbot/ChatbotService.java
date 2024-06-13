@@ -1,92 +1,122 @@
 package com.example.springapp.chatbot;
 
-import com.example.springapp.chatbot.dto.ChatGPTResponse;
-import com.example.springapp.debt.DebtService;
+import com.example.springapp.debt.DebtEntity;
+import com.example.springapp.debt.DebtRepo;
 import com.example.springapp.goals.Goal;
-import com.example.springapp.goals.GoalsService;
+import com.example.springapp.goals.GoalsRepository;
+import com.example.springapp.transaction.TransactionRepository;
 import com.example.springapp.user.UserEntity;
-import com.example.springapp.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
-import java.util.List;
-import java.util.Optional;
-import java.util.logging.Logger;
+import java.text.DateFormat;
+import java.util.*;
 
 @Service
 public class ChatbotService {
 
     @Autowired
-    private OpenAIService openAIService;
+    private GoalsRepository goalsRepository;
 
     @Autowired
-    private GoalsService goalsService;
+    private DebtRepo debtRepo;
 
     @Autowired
-    private DebtService debtService;
+    private TransactionRepository transactionRepository;
 
-    @Autowired
-    private UserService userService;
+    @Value("${openai.api.key}")
+    private String openAIKey;
 
-    private final Logger logger = Logger.getLogger(ChatbotService.class.getName());
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String openAIUrl = "https://api.openai.com/v1/engines/davinci/completions";
 
-    public String respondToQuery(String query, String sessionId) {
-        return "Service temporarily unavailable. Please try again later.";
-    }
+    public String getOpenAIResponse(String query) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(openAIKey);
 
-    public String respondToQuery(String query) {
-        Optional<UserEntity> optionalUser = userService.getCurrentUser();
-        if (!optionalUser.isPresent()) {
-            return "User not authenticated";
-        }
+        Map<String, Object> requestBody = new HashMap<>();
+        requestBody.put("prompt", query);
+        requestBody.put("max_tokens", 150);
+        requestBody.put("temperature", 0.7);
 
-        UserEntity currentUser = optionalUser.get();
-        try {
-            // Query AI for general responses
-            ChatGPTResponse aiResponse = openAIService.getChatGPTResponse(query);
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(requestBody, headers);
+        ResponseEntity<String> responseEntity = restTemplate.postForEntity(openAIUrl, requestEntity, String.class);
 
-            // Logic to decide if interaction with the database is needed
-            if (query.toLowerCase().contains("all goals")) {
-                return getAllGoals(currentUser);
-            } else if (query.toLowerCase().contains("add goal")) {
-                // Extract goal details from query and add a new goal
-                Goal goal = new Goal();
-                goal.setName("New Goal");  // Extract name from query
-                goal.setStatus("Pending"); // Extract status from query
-                goal.setUser(currentUser);    // Associate the goal with the current user
-                return addGoal(goal);
-            } else if (query.toLowerCase().contains("update debt status")) {
-                // Extract details from query and update debt status
-                Long id = 1L; // Extract ID from query
-                String status = "Paid"; // Extract status from query
-                return updateDebtStatus(id, status, currentUser);
-            }
-
-            return String.valueOf(aiResponse.getChoices().get(0).getMessage().getContent());
-        } catch (HttpClientErrorException.TooManyRequests e) {
-            logger.warning("Rate limit exceeded, providing fallback response...");
-            return "Service is temporarily unavailable due to high demand. Please try again later.";
-        } catch (RuntimeException e) {
-            // Log the error for monitoring
-            logger.severe("Error generating response: " + e.getMessage());
-            // Return a user-friendly message or perform other fallback actions
-            return "Sorry, I'm experiencing high load right now. Please try again later.";
-        }
+        return responseEntity.getBody();
     }
 
     public String getAllGoals(UserEntity user) {
-        List<Goal> goals = goalsService.getAllGoalsByUser(user);
-        return goals.toString(); // You can format this response to be more readable
+        List<Goal> goals = goalsRepository.findAllByUser(user);
+        if (goals.isEmpty()) {
+            return "Nu ai niciun obiectiv înregistrat.";
+        } else {
+            StringBuilder response = new StringBuilder("Obiectivele tale curente sunt:\n");
+            for (Goal goal : goals) {
+                response.append("- ").append(goal.getName()).append(": ").append(goal.getDescription()).append("\n");
+            }
+            return response.toString();
+        }
     }
 
     public String addGoal(Goal goal) {
-        goalsService.createGoal(goal);
-        return "Goal added successfully!";
+        goalsRepository.save(goal);
+        return "Obiectivul a fost adăugat cu succes.";
     }
 
-    public String updateDebtStatus(Long id, String status, UserEntity user) {
-        debtService.debtUpdate(id, status, user);
-        return "Debt status updated successfully!";
+    public String deleteGoal(Long id) {
+        goalsRepository.deleteById(id);
+        return "Obiectivul a fost șters cu succes.";
+    }
+
+    public String updateDebtStatus(Integer id, String status, UserEntity user) {
+        Optional<DebtEntity> debt = debtRepo.findById(id);
+        if (debt.get() != null) {
+            DebtEntity entity = debt.get();
+            entity.setStatus(status);
+            debtRepo.save(entity);
+            return "Statutul datoriei a fost actualizat.";
+        }
+        return "Datoria nu a fost găsită.";
+    }
+
+    public String addDebt(DebtEntity debt) {
+        debtRepo.save(debt);
+        return "Datoria a fost adăugată cu succes.";
+    }
+
+    public String deleteDebt(Integer id) {
+        debtRepo.deleteById(id);
+        return "Datoria a fost ștearsă cu succes.";
+    }
+
+    public String updateDebtDueDate(Integer id, Date dueDate, UserEntity user) {
+        Optional<DebtEntity> debt = debtRepo.findById(id);
+        if (debt.get() != null) {
+            DebtEntity entity = debt.get();
+            entity.setDueDate(String.valueOf(dueDate));
+            debtRepo.save(entity);
+            return "Scadența datoriei a fost actualizată.";
+        }
+        return "Datoria nu a fost găsită.";
+    }
+
+    public String getAllDebts(UserEntity user) {
+        List<DebtEntity> debts = debtRepo.findAllByUser(user);
+        if (debts.isEmpty()) {
+            return "Nu ai nicio datorie înregistrată.";
+        } else {
+            StringBuilder response = new StringBuilder("Datoriile tale curente sunt:\n");
+            for (DebtEntity debt : debts) {
+                response.append("- ").append(debt.getStatus()).append(": ").append(debt.getAmount()).append(" lei, Scadența: ").append(debt.getDueDate()).append("\n");
+            }
+            return response.toString();
+        }
     }
 }

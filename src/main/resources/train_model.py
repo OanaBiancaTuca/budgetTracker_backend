@@ -17,10 +17,10 @@ df = pd.DataFrame(data)
 X = df[['cumulative_amount', 'target_amount']]
 y = df['months_to_achieve']
 
-# Split the data
+# Împarte datele în seturi de antrenament și testare
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Train the model
+# Antrenează modelul
 model = LinearRegression()
 model.fit(X_train, y_train)
 
@@ -29,5 +29,5 @@ predictions = model.predict(X_test)
 mse = mean_squared_error(y_test, predictions)
 print(f'Mean Squared Error: {mse}')
 
-# Save the model
+# Salveaza modelul
 joblib.dump(model, 'goal_prediction_model.pkl')

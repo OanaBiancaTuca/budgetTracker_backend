@@ -27,7 +27,7 @@ public class OpenAIService {
     private final Map<String, String> responseCache = new HashMap<>();
     private static final Logger logger = Logger.getLogger(OpenAIService.class.getName());
 
-    public ChatGPTResponse getChatGPTResponse(String prompt) {
+    public ChatGPTResponse getOpenAIResponse(String prompt) {
         if (responseCache.containsKey(prompt)) {
             String cachedResponse = responseCache.get(prompt);
             ChatGPTResponse response = new ChatGPTResponse();
@@ -40,7 +40,7 @@ public class OpenAIService {
         headers.set("Authorization", "Bearer " + apiKey);
 
         ChatGPTRequest request = new ChatGPTRequest();
-        request.setModel("gpt-3.5-turbo"); // Make sure this model is accessible with your API key
+        request.setModel("gpt-3.5-turbo");
         request.setMessages(List.of(new Message("user", prompt)));
 
         HttpEntity<ChatGPTRequest> entity = new HttpEntity<>(request, headers);
