@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 public class TransactionController {
@@ -25,8 +26,13 @@ public class TransactionController {
     @PostMapping("/api/transactions")
     public BaseResponceDto addTransactions(@RequestHeader(value = "Authorization", defaultValue = "") String token, @RequestBody TransactionRequestDto transactionRequestDto) {
         String userName = jwtGenerator.getUsernameFromJWT(jwtGenerator.getTokenFromHeader(token));
-        transactionService.addTransaction(transactionRequestDto, userName);
-        return new BaseResponceDto("success", null);
+        Map<String, String> result = transactionService.addTransaction(transactionRequestDto, userName);
+        if (result.containsKey("error")) {
+           return new BaseResponceDto(result.get("error"));
+
+        }
+        return new BaseResponceDto("success");
+
     }
 
     @PutMapping("/api/transactions")

@@ -13,6 +13,8 @@ public interface BudgetService {
     Budget createBudget(BudgetRequestDto budgetRequestDto,String userName);
     Budget updateBudget(Budget budget);
     void deleteBudget(Long id);
+    boolean isBudgetExceedingLimit(Budget budget);
+    boolean isMoreThanHalfSpentInFirstHalf(Budget budget);
 
 
     boolean hasAlready(String userName, int categoryId);

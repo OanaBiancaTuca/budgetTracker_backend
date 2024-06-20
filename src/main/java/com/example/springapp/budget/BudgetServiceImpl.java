@@ -7,6 +7,7 @@ import com.example.springapp.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
@@ -71,6 +72,18 @@ public class BudgetServiceImpl implements BudgetService {
             }
         }
         return  isAlready;
+    }
+    @Override
+    public boolean isBudgetExceedingLimit(Budget budget) {
+        return budget.getUsed() > budget.getAmount();
+    }
+
+    @Override
+    public boolean isMoreThanHalfSpentInFirstHalf(Budget budget) {
+        LocalDate currentDate = LocalDate.now();
+        int dayOfMonth = currentDate.getDayOfMonth();
+        double halfMonthLimit = budget.getAmount() / 2;
+        return dayOfMonth <= 15 && budget.getUsed() > halfMonthLimit;
     }
 
 
