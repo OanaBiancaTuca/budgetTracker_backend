@@ -4,6 +4,7 @@ import com.example.springapp.chatbot.dto.ChatGPTResponse;
 import com.example.springapp.debt.DebtEntity;
 import com.example.springapp.debt.DebtService;
 import com.example.springapp.goals.Goal;
+import com.example.springapp.goals.GoalsServiceImpl;
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,8 +17,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -26,9 +26,14 @@ import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 @RestController
 @RequestMapping("/api/chatbot")
 public class ChatbotController {
+
+    private static final Logger logger = LoggerFactory.getLogger(ChatbotController.class);
 
     @Autowired
     private ChatbotService chatbotService;
@@ -40,9 +45,14 @@ public class ChatbotController {
     private DebtService debtService;
 
     @Autowired
+    private GoalsServiceImpl goalsServiceImpl;
+
+    @Autowired
     private OpenAIService openAIService;
 
     private Map<String, String> commonQuestions;
+
+    private Map<String, CommandContext> userContexts = new HashMap<>();
 
     @PostConstruct
     public void init() {
@@ -51,8 +61,7 @@ public class ChatbotController {
 
     private void loadCommonQuestions() {
         try (InputStreamReader reader = new InputStreamReader(new ClassPathResource("configurari_intrebari.json").getInputStream())) {
-            Type type = new TypeToken<Map<String, String>>() {
-            }.getType();
+            Type type = new TypeToken<Map<String, String>>() {}.getType();
             commonQuestions = new Gson().fromJson(reader, type);
         } catch (IOException e) {
             e.printStackTrace();
@@ -61,7 +70,8 @@ public class ChatbotController {
     }
 
     @PostMapping("/query")
-    public ResponseEntity<String> respondToQuery(@RequestBody String query) {
+    public ResponseEntity<String> respondToQuery(@RequestBody Map<String, String> payload) {
+        String query = payload.get("userMessage");
         Optional<UserEntity> optionalUser = userService.getCurrentUser();
         if (!optionalUser.isPresent()) {
             return ResponseEntity.status(401).body("User not authenticated");
@@ -72,30 +82,70 @@ public class ChatbotController {
             return ResponseEntity.status(500).body("Configurațiile întrebărilor nu au fost încărcate corect.");
         }
 
+        String userId = currentUser.getEmail();
+        CommandContext context = userContexts.getOrDefault(userId, new CommandContext());
+
         String response;
-        if (commonQuestions.containsKey(query.toLowerCase())) {
-            response = commonQuestions.get(query.toLowerCase());
-        } else {
-            response = parseCommand(query, currentUser);
+        try {
+            if (context.isActive()) {
+                response = handleStep(query, context, currentUser);
+            } else {
+                if (commonQuestions.containsKey(query.toLowerCase())) {
+                    response = commonQuestions.get(query.toLowerCase());
+                } else {
+                    response = parseCommand(query, currentUser, context);
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error handling query: {}", query, e);
+            return ResponseEntity.status(500).body("Internal server error: " + e.getMessage());
         }
+        userContexts.put(userId, context);
         return ResponseEntity.ok(response);
     }
 
-    private String parseCommand(String query, UserEntity user) {
+    @GetMapping("/debts")
+    public ResponseEntity<List<DebtEntity>> getDebts() {
+        Optional<UserEntity> optionalUser = userService.getCurrentUser();
+        if (!optionalUser.isPresent()) {
+            return ResponseEntity.status(401).body(null);
+        }
+        UserEntity user = optionalUser.get();
+        List<DebtEntity> debts = debtService.debtGet(user.getEmail(), 0);
+        return ResponseEntity.ok(debts);
+    }
+
+    @GetMapping("/goals")
+    public ResponseEntity<List<Goal>> getGoals() {
+        Optional<UserEntity> optionalUser = userService.getCurrentUser();
+        if (!optionalUser.isPresent()) {
+            return ResponseEntity.status(401).body(null);
+        }
+        UserEntity user = optionalUser.get();
+        List<Goal> goals = goalsServiceImpl.getAllGoalsByUser(user);
+        return ResponseEntity.ok(goals);
+    }
+
+    private String parseCommand(String query, UserEntity user, CommandContext context) {
+        String command = null;
         if (query.toLowerCase().contains("adaugă obiectivul")) {
-            return parseAndAddGoal(query, user);
+            command = "Adaugă obiectiv";
         } else if (query.toLowerCase().contains("vizualizează obiectivele")) {
-            return chatbotService.getAllGoals(user);
+            List<Goal> goals = goalsServiceImpl.getAllGoalsByUser(user);
+            return formatGoals(goals);
+        } else if (query.toLowerCase().contains("vizualizează datoriile")) {
+            List<DebtEntity> debts = debtService.debtGet(user.getEmail(), 0);
+            return formatDebts(debts);
         } else if (query.toLowerCase().contains("șterge obiectivul")) {
-            return parseAndDeleteGoal(query);
-        } else if (query.toLowerCase().contains("actualizează statutul datoriei")) {
-            return parseAndUpdateDebtStatus(query, user);
+            command = "Șterge obiectiv";
+        } else if (query.toLowerCase().contains("actualizează statusul datoriei")) {
+            command = "Actualizează statusul datoriei";
         } else if (query.toLowerCase().contains("adaugă datoria")) {
-            return parseAndAddDebt(query, user);
+            command = "Adaugă datorie";
         } else if (query.toLowerCase().contains("șterge datoria")) {
-            return parseAndDeleteDebt(query);
+            command = "Șterge datorie";
         } else if (query.toLowerCase().contains("schimbă scadența datoriei")) {
-            return parseAndUpdateDebtDueDate(query, user);
+            command = "Schimbă scadența datoriei";
         } else {
             ChatGPTResponse aiResponse = openAIService.getOpenAIResponse(query);
             if (aiResponse != null && !aiResponse.getChoices().isEmpty()) {
@@ -104,107 +154,263 @@ public class ChatbotController {
                 return "Nu am putut genera un răspuns. Te rog să încerci din nou.";
             }
         }
+
+        if (command != null) {
+            context.startNewCommand(command);
+            return getOperationInstruction(command, 1);
+        }
+        return "Comanda nu este recunoscută.";
     }
 
-    private String parseAndAddGoal(String query, UserEntity user) {
-        Pattern pattern = Pattern.compile("adaugă obiectivul cu numele ([^,]+), suma (\\d+) lei, targetDate (\\d{2}-\\d{2}-\\d{4})");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            String name = matcher.group(1).trim();
-            String amount = matcher.group(2).trim();
-            String targetDateStr = matcher.group(3).trim();
+    private String handleStep(String query, CommandContext context, UserEntity user) {
+        String command = context.getCurrentCommand();
+        if (command.equals("Adaugă obiectiv")) {
+            return handleAddGoalStep(query, context, user);
+        } else if (command.equals("Șterge obiectiv")) {
+            return handleDeleteGoalStep(query, context);
+        } else if (command.equals("Actualizează statusul datoriei")) {
+            return handleUpdateDebtStatusStep(query, context, user);
+        } else if (command.equals("Adaugă datorie")) {
+            return handleAddDebtStep(query, context, user);
+        } else if (command.equals("Șterge datorie")) {
+            return handleDeleteDebtStep(query, context);
+        } else if (command.equals("Schimbă scadența datoriei")) {
+            return handleUpdateDebtDueDateStep(query, context, user);
+        }
+        return "Comanda nu este recunoscută.";
+    }
 
+    private String handleAddGoalStep(String query, CommandContext context, UserEntity user) {
+        int step = context.getStep();
+        if (step == 1) {
+            context.addStepData("name", query);
+            context.incrementStep();
+            return getOperationInstruction("Adaugă obiectiv", step + 1);
+        } else if (step == 2) {
+            if (!query.matches("\\d+")) {
+                return "Suma trebuie să fie un număr valid.";
+            }
+            context.addStepData("amount", query);
+            context.incrementStep();
+            return getOperationInstruction("Adaugă obiectiv", step + 1);
+        } else if (step == 3) {
+            context.addStepData("targetDate", query);
             SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
             try {
                 Goal goal = new Goal();
-                goal.setName(name);
-                goal.setDescription("Suma: " + amount + " lei, Target Date: " + targetDateStr);
+                goal.setStatus("Pending");
+                goal.setName(context.getStepData("name"));
+                goal.setTargetAmount(Double.parseDouble(context.getStepData("amount")));
+                goal.setTargetDate(dateFormat.parse(context.getStepData("targetDate")).getTime());
                 goal.setUser(user);
-                goal.setTargetDate(dateFormat.parse(targetDateStr).getTime());
-
-                return chatbotService.addGoal(goal);
+                String result = goalsServiceImpl.createGoal(goal) != null ? "Obiectiv adăugat cu succes." : "Eroare la adăugarea obiectivului.";
+                context.reset();
+                return result;
             } catch (ParseException e) {
                 return "Data specificată nu este într-un format valid. Folosește formatul zz-ll-aaaa.";
             }
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Adaugă obiectivul cu numele Masina, suma 1000 lei, targetDate 24-10-2024.";
+        }
+        return "Eroare la adăugarea obiectivului.";
+    }
+
+    private String handleDeleteGoalStep(String query, CommandContext context) {
+        try {
+            Long id = Long.parseLong(query.trim());
+            goalsServiceImpl.deleteGoal(id);
+            context.reset();
+            return "Obiectiv șters cu succes.";
+        } catch (NumberFormatException e) {
+            return "ID-ul specificat nu este valid.";
         }
     }
 
-    private String parseAndDeleteGoal(String query) {
-        Pattern pattern = Pattern.compile("șterge obiectivul cu id (\\d+)");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            Long id = Long.parseLong(matcher.group(1).trim());
-            return chatbotService.deleteGoal(id);
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Șterge obiectivul cu ID 1.";
+    private String handleUpdateDebtStatusStep(String query, CommandContext context, UserEntity user) {
+        int step = context.getStep();
+        if (step == 1) {
+            context.addStepData("id", query);
+            context.incrementStep();
+            return getOperationInstruction("Actualizează statusul datoriei", step + 1);
+        } else if (step == 2) {
+            context.addStepData("status", query);
+            try {
+                Integer id = Integer.parseInt(context.getStepData("id"));
+                String status = context.getStepData("status");
+                debtService.debtUpdate(id, status, user);
+                context.reset();
+                return "Statusul datoriei actualizat cu succes.";
+            } catch (NumberFormatException e) {
+                return "ID-ul specificat nu este valid.";
+            }
         }
+        return "Eroare la actualizarea statusului datoriei.";
     }
 
-    private String parseAndUpdateDebtStatus(String query, UserEntity user) {
-        Pattern pattern = Pattern.compile("actualizează statutul datoriei cu id (\\d+) la (.+)");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            Integer id = Integer.parseInt(matcher.group(1).trim());
-            String status = matcher.group(2).trim();
-            return chatbotService.updateDebtStatus(id, status, user);
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Actualizează statutul datoriei cu ID 1 la achitat.";
-        }
-    }
-
-    private String parseAndAddDebt(String query, UserEntity user) {
-        Pattern pattern = Pattern.compile("adaugă datoria cu descrierea ([^,]+), suma (\\d+) lei, scadența (\\d{2}-\\d{2}-\\d{4})");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            String description = matcher.group(1).trim();
-            String amount = matcher.group(2).trim();
-            String dueDateStr = matcher.group(3).trim();
-
+    private String handleAddDebtStep(String query, CommandContext context, UserEntity user) {
+        int step = context.getStep();
+        if (step == 1) {
+            context.addStepData("description", query);
+            context.incrementStep();
+            return getOperationInstruction("Adaugă datorie", step + 1);
+        } else if (step == 2) {
+            if (!query.matches("\\d+")) {
+                return "Suma trebuie să fie un număr valid.";
+            }
+            context.addStepData("amount", query);
+            context.incrementStep();
+            return getOperationInstruction("Adaugă datorie", step + 1);
+        } else if (step == 3) {
+            context.addStepData("moneyFrom", query);
+            context.incrementStep();
+            return getOperationInstruction("Adaugă datorie", step + 1);
+        } else if (step == 4) {
+            context.addStepData("dueDate", query);
             SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
+            SimpleDateFormat dbFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH);
             try {
                 DebtEntity debt = new DebtEntity();
-                debt.setStatus(description);
-                debt.setAmount(Double.parseDouble(amount));
+                debt.setStatus(context.getStepData("description"));
+                debt.setAmount(Double.parseDouble(context.getStepData("amount")));
                 debt.setUser(user);
-                debt.setDueDate(String.valueOf(dateFormat.parse(dueDateStr)));
-
-                return chatbotService.addDebt(debt);
+                debt.setMoneyFrom(context.getStepData("moneyFrom"));
+                debt.setDueDate(dbFormat.format(dateFormat.parse(context.getStepData("dueDate"))));
+                String result = debtService.debtCreate(debt, user.getEmail()) != null ? "Datorie adăugată cu succes." : "Eroare la adăugarea datoriei.";
+                context.reset();
+                return result;
             } catch (ParseException e) {
                 return "Data specificată nu este într-un format valid. Folosește formatul zz-ll-aaaa.";
             }
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Adaugă datoria cu descrierea Împrumut, suma 1000 lei, scadența 24-10-2024.";
+        }
+        return "Eroare la adăugarea datoriei.";
+    }
+
+    private String handleDeleteDebtStep(String query, CommandContext context) {
+        try {
+            Integer id = Integer.parseInt(query.trim());
+            String result = debtService.debtDelete(id);
+            context.reset();
+            return "Datorie ștearsă cu succes.";
+        } catch (NumberFormatException e) {
+            return "ID-ul specificat nu este valid.";
         }
     }
 
-    private String parseAndDeleteDebt(String query) {
-        Pattern pattern = Pattern.compile("șterge datoria cu id (\\d+)");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            Integer id = Integer.parseInt(matcher.group(1).trim());
-            return chatbotService.deleteDebt(id);
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Șterge datoria cu ID 1.";
-        }
-    }
-
-    private String parseAndUpdateDebtDueDate(String query, UserEntity user) {
-        Pattern pattern = Pattern.compile("schimbă scadența datoriei cu id (\\d+) la (\\d{2}-\\d{2}-\\d{4})");
-        Matcher matcher = pattern.matcher(query.toLowerCase());
-        if (matcher.find()) {
-            Integer id = Integer.parseInt(matcher.group(1).trim());
-            String dueDateStr = matcher.group(2).trim();
-
+    private String handleUpdateDebtDueDateStep(String query, CommandContext context, UserEntity user) {
+        int step = context.getStep();
+        if (step == 1) {
+            context.addStepData("id", query);
+            context.incrementStep();
+            return getOperationInstruction("Schimbă scadența datoriei", step + 1);
+        } else if (step == 2) {
+            context.addStepData("newDueDate", query);
             SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy");
+            SimpleDateFormat dbFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH);
             try {
-                return chatbotService.updateDebtDueDate(id, dateFormat.parse(dueDateStr), user);
-            } catch (ParseException e) {
+                Integer id = Integer.parseInt(context.getStepData("id"));
+                String newDueDate = dbFormat.format(dateFormat.parse(context.getStepData("newDueDate")));
+                debtService.debtUpdateDate(id, newDueDate, user);
+                context.reset();
+                return "Data scadenței datoriei actualizată cu succes.";
+            } catch (NumberFormatException | ParseException e) {
                 return "Data specificată nu este într-un format valid. Folosește formatul zz-ll-aaaa.";
             }
-        } else {
-            return "Comanda nu este într-un format valid. Exemplu: Schimbă scadența datoriei cu ID 1 la 24-10-2024.";
+        }
+        return "Eroare la actualizarea datei scadenței datoriei.";
+    }
+
+    private String getOperationInstruction(String operation, int step) {
+        Map<String, String[]> instructions = new HashMap<>();
+        instructions.put("Adaugă obiectiv", new String[]{
+                "Te rog să trimiți numele obiectivului:",
+                "Te rog să trimiți suma obiectivului (în lei):",
+                "Te rog să trimiți data țintă (zz-ll-aaaa):"
+        });
+        instructions.put("Actualizează statusul datoriei", new String[]{
+                "Te rog să trimiți id-ul datoriei:",
+                "Te rog să trimiți noul status al datoriei:"
+        });
+        instructions.put("Adaugă datorie", new String[]{
+                "Te rog să trimiți descrierea datoriei:",
+                "Te rog să trimiți suma datoriei (în lei):",
+                "Te rog să trimiți furnizorul datoriei:",
+                "Te rog să trimiți data scadenței (zz-ll-aaaa):"
+        });
+        instructions.put("Schimbă scadența datoriei", new String[]{
+                "Te rog să trimiți id-ul datoriei:",
+                "Te rog să trimiți noua dată a scadenței (zz-ll-aaaa):"
+        });
+
+        String[] steps = instructions.get(operation);
+        if (steps != null && step <= steps.length) {
+            return steps[step - 1];
+        }
+        return "Comanda nu este recunoscută.";
+    }
+
+    private String formatGoals(List<Goal> goals) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Obiectivele tale:\n");
+        for (Goal goal : goals) {
+            sb.append(String.format("ID: %d, Nume: %s, Suma: %.2f lei, Data țintă: %s\n",
+                    goal.getId(), goal.getName(), goal.getTargetAmount(),
+                    new SimpleDateFormat("dd-MM-yyyy").format(goal.getTargetDate())));
+        }
+        return sb.toString();
+    }
+
+    private String formatDebts(List<DebtEntity> debts) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Datoriile tale:\n");
+        for (DebtEntity debt : debts) {
+            sb.append(String.format("ID: %d, Descriere: %s, Suma: %.2f lei, Data scadenței: %s\n",
+                    debt.getDebtId(), debt.getStatus(), debt.getAmount(),
+                    debt.getDueDate()));
+        }
+        return sb.toString();
+    }
+
+    private static class CommandContext {
+        private String currentCommand;
+        private int step;
+        private Map<String, String> stepData;
+
+        public CommandContext() {
+            reset();
+        }
+
+        public void startNewCommand(String command) {
+            this.currentCommand = command;
+            this.step = 1;
+            this.stepData = new HashMap<>();
+        }
+
+        public void addStepData(String key, String value) {
+            stepData.put(key, value);
+        }
+
+        public String getStepData(String key) {
+            return stepData.get(key);
+        }
+
+        public String getCurrentCommand() {
+            return currentCommand;
+        }
+
+        public int getStep() {
+            return step;
+        }
+
+        public void incrementStep() {
+            this.step++;
+        }
+
+        public boolean isActive() {
+            return currentCommand != null;
+        }
+
+        public void reset() {
+            this.currentCommand = null;
+            this.step = 0;
+            this.stepData = null;
         }
     }
 }

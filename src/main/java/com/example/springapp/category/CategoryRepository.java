@@ -11,4 +11,5 @@ import java.util.List;
 public interface CategoryRepository extends JpaRepository<Category,Integer> {
     public List<Category> findAllByUserId(UserEntity userId);
 
+    Category findByName(String categoryName);
 }

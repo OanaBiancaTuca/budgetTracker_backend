@@ -3,6 +3,8 @@ package com.example.springapp.debt;
 import com.example.springapp.user.UserEntity;
 
 import javax.persistence.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 @Entity
 public class DebtEntity {
@@ -79,6 +81,13 @@ public class DebtEntity {
         this.status = status;
     }
 
+    public void resetForNextMonth() {
+        this.status = "unpaid";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        LocalDate localDate = LocalDate.parse(this.dueDate, formatter);
+        localDate = localDate.plusMonths(1);
+        this.dueDate = localDate.format(formatter);
+    }
     @Override
     public String toString() {
         return "DebtEntity{" +

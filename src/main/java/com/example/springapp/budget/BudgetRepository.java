@@ -24,7 +24,7 @@ public interface BudgetRepository extends JpaRepository<Budget,Long> {
 
 
     @Query(value = "SELECT budget.id, budget.amount, budget.category_id, budget.user_id, " +
-            "budget.used, budget.balance " +
+            "budget.used, budget.balance, budget.initial_amount, budget.modified_at " +
             "FROM budget WHERE budget.user_id=?1", nativeQuery = true)
 
     List<Budget> findAllByUser(Integer user_id);

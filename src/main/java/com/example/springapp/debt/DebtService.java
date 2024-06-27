@@ -13,7 +13,7 @@ import javax.mail.internet.MimeMessage;
 import javax.transaction.Transactional;
 import java.io.UnsupportedEncodingException;
 import java.time.LocalDate;
-import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
@@ -160,6 +160,7 @@ public class DebtService {
     }
 
 
+
     public void sendEmail(String to, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setTo(to);
@@ -168,11 +169,30 @@ public class DebtService {
         mailSender.send(message);
     }
 
-    public void debtUpdate(Long id, String status, UserEntity user) {
-        DebtEntity debt = debtR.findById(user.getUserId()).get();
+    public void debtUpdate(Integer id, String status, UserEntity user) {
+        DebtEntity debt = debtR.findById(id).get();
         if (Objects.nonNull(status)) {
             debt.setStatus(status);
         }
         debtR.save(debt);
+    }
+    public void debtUpdateDate(Integer id, String date, UserEntity user) {
+        DebtEntity debt = debtR.findById(id).get();
+        if (Objects.nonNull(date)) {
+            debt.setDueDate(date);
+        }
+        debtR.save(debt);
+    }
+
+    public void resetDebts() {
+        List<DebtEntity> debts = debtR.findAll();
+        for (DebtEntity debt : debts) {
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+            LocalDate dueDate = LocalDate.parse(debt.getDueDate(), formatter);
+            if (dueDate.isBefore(LocalDate.now())) {
+                debt.resetForNextMonth();
+                debtR.save(debt);
+            }
+        }
     }
 }

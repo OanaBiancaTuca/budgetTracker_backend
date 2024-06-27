@@ -102,6 +102,49 @@ public class TransactionService {
         return response;
     }
 
+    public Map<String, String> addTransaction(Transaction transaction, String userName) {
+        Map<String, String> response = new HashMap<>();
+        UserEntity user = userRepository.findByEmail(userName).orElseThrow();
+        transaction.setUser(user);
+
+        if (transaction.getCategory().getType().equals("expense") && transaction.getAccount().getCurrentBalance() - transaction.getAmount() < 0) {
+            response.put("error", "Sold insuficient!");
+            return response;
+        }
+
+        if (transaction.getCategory().getType().equals("expense")) {
+            List<Budget> budgets = budgetRepository.findByCategory(transaction.getCategory());
+            for (Budget budget : budgets) {
+                double newUsedAmount = budget.getUsed() + transaction.getAmount();
+
+                // Check if the transaction exceeds the budget limit
+                if (newUsedAmount > budget.getAmount()) {
+                    response.put("error", "Tranzacția depășește limita bugetului");
+                    return response;
+                }
+
+                // Check if more than 50% of the budget is spent in the first half of the month
+                if (isMoreThanHalfSpentInFirstHalf(budget, transaction.getAmount())) {
+                    response.put("error", "Mai mult de 50% din buget a fost cheltuit în prima jumătate a lunii");
+                    return response;
+                }
+
+                long amount = (long) (budget.getBalance() - transaction.getAmount());
+                budget.setBalance(amount);
+                budget.setUsed(budget.getUsed() + (long) transaction.getAmount());
+                budgetService.updateBudget(budget);
+            }
+
+            accountService.debitBalance(transaction.getAccount(), transaction.getAmount());
+        } else if (transaction.getCategory().getType().equals("income")) {
+            accountService.creditBalance(transaction.getAccount(), transaction.getAmount());
+        }
+
+        transactionRepository.save(transaction);
+        response.put("success", "Tranzacția a fost adăugată cu succes");
+        return response;
+    }
+
     private boolean isMoreThanHalfSpentInFirstHalf(Budget budget, double transactionAmount) {
         LocalDate currentDate = LocalDate.now();
         int dayOfMonth = currentDate.getDayOfMonth();
