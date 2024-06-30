@@ -1,0 +1,11 @@
+impozit
+taxa
+contributie
+fiscala
+biruri
+duty
+tax
+levy
+excise
+tariff
+fee

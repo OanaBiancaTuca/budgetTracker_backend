@@ -3,6 +3,8 @@ package com.example.springapp.chatbot;
 import com.example.springapp.chatbot.dto.ChatGPTRequest;
 import com.example.springapp.chatbot.dto.ChatGPTResponse;
 import com.example.springapp.chatbot.dto.Message;
+import com.example.springapp.transaction.Transaction;
+import com.example.springapp.transaction.TransactionRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,7 +29,13 @@ public class OpenAIService {
     private final Map<String, String> responseCache = new HashMap<>();
     private static final Logger logger = Logger.getLogger(OpenAIService.class.getName());
 
-    public ChatGPTResponse getOpenAIResponse(String prompt) {
+    private final TransactionRepository transactionRepository;
+
+    public OpenAIService(TransactionRepository transactionRepository) {
+        this.transactionRepository = transactionRepository;
+    }
+
+    public ChatGPTResponse getOpenAIResponse(String prompt, Integer userId) {
         if (responseCache.containsKey(prompt)) {
             String cachedResponse = responseCache.get(prompt);
             ChatGPTResponse response = new ChatGPTResponse();
@@ -39,9 +47,20 @@ public class OpenAIService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.set("Authorization", "Bearer " + apiKey);
 
+        // Fetch top transactions from the database
+        List<Transaction> topTransactions = transactionRepository.findTop10ByUser_UserIdOrderByAmountDesc(userId);
+        StringBuilder transactionDetails = new StringBuilder("Cele mai mari tranzacții/cheltuieli sunt:\n");
+        for (Transaction transaction : topTransactions) {
+            transactionDetails.append(String.format("Descriere: %s, Suma: %s, Data: %s\n",
+                    transaction.getDescription(), transaction.getAmount(), transaction.getDateTime()));
+        }
+
+        String customizedPrompt = "Ești un expert în economie și investiții. Răspunde la următoarea întrebare ca și cum ai fi un om cunoscător în acest domeniu și răspunde în limba română. " +
+                prompt + "\n\n" + transactionDetails.toString();
+
         ChatGPTRequest request = new ChatGPTRequest();
         request.setModel("gpt-3.5-turbo");
-        request.setMessages(List.of(new Message("user", prompt)));
+        request.setMessages(List.of(new Message("user", customizedPrompt)));
 
         HttpEntity<ChatGPTRequest> entity = new HttpEntity<>(request, headers);
         RestTemplate template = new RestTemplate();

@@ -8,9 +8,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class PredictionService {
@@ -18,61 +16,90 @@ public class PredictionService {
     @Autowired
     private TransactionService transactionService;
 
-    public List<Double> predictGoalAchievementTime(Integer userId, List<Double> targetAmounts) throws IOException, InterruptedException {
-        // Get transactions for the last 6 months
-        List<Object[]> transactions = transactionService.getTransactionForLastSixMonths(userId);
+    @Autowired
+    private GoalsRepository goalRepository;
 
-        // Calculate cumulative income and expenses
-        double cumulativeIncome = transactions.stream()
-                .filter(t -> "income".equalsIgnoreCase((String) t[0]))
-                .mapToDouble(t -> ((Number) t[1]).doubleValue())
-                .sum();
+    public List<Double> predictGoalAchievementTime(Integer userId, List<Goal> goals) throws IOException, InterruptedException {
+        // Obține tranzacțiile pentru ultimele 6 luni
+        List<Object[]> transactionsData = transactionService.getTransactionForLastSixMonths(userId);
 
-        double cumulativeExpenses = transactions.stream()
-                .filter(t -> "expense".equalsIgnoreCase((String) t[0]))
-                .mapToDouble(t -> ((Number) t[1]).doubleValue())
-                .sum();
+        double totalIncome = 0;
+        double totalExpenses = 0;
+        int monthsWithData = transactionsData.size() > 0 ? transactionsData.size() : 1;  // pentru a preveni diviziunea cu zero
 
-        double cumulativeAmount = cumulativeIncome - cumulativeExpenses;
+        for (Object[] data : transactionsData) {
+            String type = (String) data[0];
+            double total = Double.parseDouble(data[1].toString());
 
-        // Calculate monthly income and expenses
-        double monthlyIncome = cumulativeIncome / 6.0;
-        double monthlyExpenses = cumulativeExpenses / 6.0;
+            if (type.equals("income")) {
+                totalIncome += total;
+            } else if (type.equals("expense")) {
+                totalExpenses += total;
+            }
+        }
 
-        System.out.println("Cumulative Income: " + cumulativeIncome);
-        System.out.println("Cumulative Expenses: " + cumulativeExpenses);
-        System.out.println("Cumulative Amount: " + cumulativeAmount);
-        System.out.println("Monthly Income: " + monthlyIncome);
-        System.out.println("Monthly Expenses: " + monthlyExpenses);
+        double averageMonthlyIncome = totalIncome / monthsWithData;
+        double averageMonthlyExpenses = totalExpenses / monthsWithData;
+        double monthlySavings = averageMonthlyIncome - averageMonthlyExpenses;
 
-        // Sort target amounts in ascending order
-        Collections.sort(targetAmounts);
+        System.out.println("Average Monthly Income: " + averageMonthlyIncome);
+        System.out.println("Average Monthly Expenses: " + averageMonthlyExpenses);
+        System.out.println("Monthly Savings: " + monthlySavings);
 
-        // Absolute path to the Python script and model file
+        // Extrage sumele țintă din obiective
+        List<Double> targetAmounts = new ArrayList<>();
+        Map<Double, Goal> targetAmountToGoalMap = new HashMap<>();
+        for (Goal goal : goals) {
+            if ("Pending".equals(goal.getStatus())) {
+                targetAmounts.add(goal.getTargetAmount());
+                targetAmountToGoalMap.put(goal.getTargetAmount(), goal);
+            }
+        }
+
+        // Verifică dacă nu există obiective pentru a evita diviziunea cu zero
+        if (targetAmounts.isEmpty()) {
+            System.err.println("No pending goals to predict for.");
+            return Collections.emptyList();
+        }
+
+        // Calculează economiile lunare pe obiectiv
+        double monthlySavingsPerGoal = monthlySavings / targetAmounts.size();
+
+        // Calea absolută către scriptul Python și fișierul modelului
         String scriptPath = Paths.get("D:\\Disertatie\\paymint-web-app-main\\paymint-web-app-main\\springapp\\src\\main\\resources\\predict.py").toAbsolutePath().toString();
         String modelPath = Paths.get("D:\\Disertatie\\paymint-web-app-main\\paymint-web-app-main\\springapp\\src\\main\\resources\\goal_prediction_model.pkl").toAbsolutePath().toString();
 
-        // Prepare the command with all target amounts
-        StringBuilder commandBuilder = new StringBuilder(String.format("python %s %s %f %f %f", scriptPath, modelPath, cumulativeAmount, monthlyIncome, monthlyExpenses));
+        // Pregătește comanda cu toate sumele țintă
+        StringBuilder commandBuilder = new StringBuilder(String.format("python %s %s %f", scriptPath, modelPath, monthlySavingsPerGoal));
         for (double targetAmount : targetAmounts) {
             commandBuilder.append(" ").append(targetAmount);
         }
         String command = commandBuilder.toString();
 
-        // Print the constructed command for debugging
+        // Afișează comanda construită pentru depanare
         System.out.println("Constructed Command: " + command);
 
         Process process = Runtime.getRuntime().exec(command);
 
-        // Capture the output of the Python script
+        // Capturează ieșirea scriptului Python
         BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
         List<Double> predictions = new ArrayList<>();
         String line;
         while ((line = reader.readLine()) != null) {
-            predictions.add(Double.parseDouble(line));
+            // Extrage doar ultima linie care conține predicțiile
+            if (line.startsWith("Predictions: ")) {
+                String[] predictionStrings = line.replace("Predictions: ", "").split(" ");
+                for (String predictionString : predictionStrings) {
+                    try {
+                        predictions.add(Double.parseDouble(predictionString));
+                    } catch (NumberFormatException e) {
+                        System.err.println("Error parsing prediction: " + predictionString);
+                    }
+                }
+            }
         }
 
-        // Capture errors from the Python script
+        // Capturează erorile scriptului Python
         BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
         StringBuilder errorBuilder = new StringBuilder();
         while ((line = errorReader.readLine()) != null) {
@@ -83,13 +110,26 @@ public class PredictionService {
 
         String errors = errorBuilder.toString().trim();
 
-        // Log the errors
+        // Afișează erorile
         if (!errors.isEmpty()) {
             System.err.println("Errors from the Python script: " + errors);
         }
 
-        // Log the predictions
+        // Afișează predicțiile
         System.out.println("Predictions from Python script: " + predictions);
+
+        // Asigură-te că numărul de predicții se potrivește cu numărul de obiective în Pending
+        if (predictions.size() != targetAmounts.size()) {
+            throw new IllegalStateException("Number of predictions does not match number of pending goals.");
+        }
+
+        // Maparea predicțiilor la obiective folosind valoarea țintă
+        for (int i = 0; i < targetAmounts.size(); i++) {
+            double targetAmount = targetAmounts.get(i);
+            Goal goal = targetAmountToGoalMap.get(targetAmount);
+            goal.setPrediction((int) Math.ceil(predictions.get(i) * 30)); // Convert months to days
+            goalRepository.save(goal);
+        }
 
         return predictions;
     }

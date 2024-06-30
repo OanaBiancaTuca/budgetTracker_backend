@@ -1,0 +1,9 @@
+restaurant
+food
+meal
+dinner
+lunch
+breakfast
+cafe
+coffee
+kafe

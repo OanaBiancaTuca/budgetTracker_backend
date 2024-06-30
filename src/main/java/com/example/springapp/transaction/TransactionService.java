@@ -1,17 +1,17 @@
 package com.example.springapp.transaction;
 
 import com.example.springapp.account.Account;
+import com.example.springapp.account.AccountService;
 import com.example.springapp.budget.Budget;
 import com.example.springapp.budget.BudgetRepository;
 import com.example.springapp.budget.BudgetService;
 import com.example.springapp.category.Category;
+import com.example.springapp.category.CategoryService;
 import com.example.springapp.user.UserEntity;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Service;
 import com.example.springapp.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import com.example.springapp.category.CategoryService;
-import com.example.springapp.account.AccountService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.*;
@@ -47,7 +47,7 @@ public class TransactionService {
         }
     }
 
-    public Map<String,String> addTransaction(TransactionRequestDto transactionRequestDto, String userName) {
+    public Map<String, String> addTransaction(TransactionRequestDto transactionRequestDto, String userName) {
         Map<String, String> response = new HashMap<>();
         Account account = accountService.getAccountById(transactionRequestDto.getAccountId());
         Category category = categoryService.getCategoryById(transactionRequestDto.getCategoryId());
@@ -212,4 +212,6 @@ public class TransactionService {
         // Fetch expenses from the repository
         return transactionRepository.getLastSixMonthsIncome(userId, sixMonthsAgo);
     }
+
+
 }

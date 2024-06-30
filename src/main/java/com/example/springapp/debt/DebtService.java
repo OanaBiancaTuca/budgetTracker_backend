@@ -12,11 +12,12 @@ import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import javax.transaction.Transactional;
 import java.io.UnsupportedEncodingException;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.*;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Transactional
@@ -38,7 +39,6 @@ public class DebtService {
             UserEntity user = userRepository.findByEmail(uName).orElseThrow();
             deb.setUser(user);
         } catch (Exception ignored) {
-
         }
         return debtR.save(deb);
     }
@@ -87,12 +87,18 @@ public class DebtService {
 
     private Date parseDueDate(String dueDate) {
         try {
-            SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy");
+            SimpleDateFormat formatter = new SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH);
             return formatter.parse(dueDate);
         } catch (ParseException e) {
             e.printStackTrace();
             return null;
         }
+    }
+
+    private LocalDate convertToLocalDateViaInstant(Date dateToConvert) {
+        return dateToConvert.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
     }
 
     public List<DebtEntity> getAllDebts() {
@@ -103,7 +109,7 @@ public class DebtService {
         return debtR.findById(dId).get();
     }
 
-    @Scheduled(cron = "0 30 9 * * ?")
+    @Scheduled(cron = "0 44 17 * * ?")
     public void checkDueDatesAndNotify() throws MessagingException, UnsupportedEncodingException {
         LocalDate today = LocalDate.now();
         LocalDate twoDaysLater = today.plusDays(2);
@@ -131,12 +137,9 @@ public class DebtService {
                 helper.setSubject(subject);
                 helper.setText(emailContent, true);
                 mailSender.send(message);
-
             }
         }
-
     }
-
 
     private String composeEmailContent(String userName, String debtName, double amount, Date dueDate) {
         SimpleDateFormat dateFormat = new SimpleDateFormat("dd MMMM yyyy", Locale.getDefault());
@@ -155,11 +158,7 @@ public class DebtService {
                 "    <span style=\"font-family: sans-serif;\">Mulțumim,</span><br>\n" +
                 "    <span style=\"font-family: sans-serif;\">Echipa Paymint</span>\n" +
                 "</div>";
-
-
     }
-
-
 
     public void sendEmail(String to, String subject, String body) {
         SimpleMailMessage message = new SimpleMailMessage();
@@ -176,6 +175,7 @@ public class DebtService {
         }
         debtR.save(debt);
     }
+
     public void debtUpdateDate(Integer id, String date, UserEntity user) {
         DebtEntity debt = debtR.findById(id).get();
         if (Objects.nonNull(date)) {
@@ -184,15 +184,49 @@ public class DebtService {
         debtR.save(debt);
     }
 
-    public void resetDebts() {
+    public void resetDebts() throws MessagingException {
         List<DebtEntity> debts = debtR.findAll();
         for (DebtEntity debt : debts) {
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-            LocalDate dueDate = LocalDate.parse(debt.getDueDate(), formatter);
-            if (dueDate.isBefore(LocalDate.now())) {
+            Date dueDate = parseDueDate(debt.getDueDate());
+            LocalDate localDueDate = convertToLocalDateViaInstant(dueDate);
+            if (localDueDate.isBefore(LocalDate.now())) {
                 debt.resetForNextMonth();
                 debtR.save(debt);
+                sendEmailNotificationDebt(debt);
             }
+        }
+    }
+
+    private void sendEmailNotificationDebt(DebtEntity debt) throws MessagingException {
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        try {
+            helper.setTo(debt.getUser().getEmail()); // Setează destinatarul emailului
+            helper.setSubject("Notificare resetare scadență datorie"); // Setează subiectul emailului în română
+
+            // Formatează data scadenței datoriei într-un format ușor de citit
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd MMMM yyyy", new Locale("ro"));
+            Date dueDate = parseDueDate(debt.getDueDate());
+            LocalDate localDueDate = convertToLocalDateViaInstant(dueDate);
+            String formattedDueDate = localDueDate.format(formatter);
+
+            // Construiește conținutul emailului conform șablonului
+            String emailContent = "<div>\n" +
+                    "    <span style=\"color:#5C6AC4;font-family: sans-serif;font-size:32px;\"><b>Paymint</b></span><br><br>\n" +
+                    "    <span style=\"font-family: sans-serif;\">Dragă " + debt.getUser().getLastName() + ",</span><br><br>\n" +
+                    "    <span style=\"font-family: sans-serif;\">Acesta este un reminder că scadența pentru datoria ta: <b>" + debt.getMoneyFrom() + "</b>, în valoare de <b>" + debt.getAmount() + "</b>, a fost resetată pentru data de: <b>" + formattedDueDate + "</b>.</span><br><br>\n" +
+                    "    <span style=\"font-family: sans-serif;\">Te rugăm să efectuezi plata înainte de data scadenței pentru a evita penalizările.</span><br><br>\n" +
+                    "    <span style=\"font-family: sans-serif;\">Mulțumim,</span><br>\n" +
+                    "    <span style=\"font-family: sans-serif;\">Echipa Paymint</span>\n" +
+                    "</div>";
+
+            helper.setText(emailContent, true); // Setează conținutul emailului ca HTML
+
+            mailSender.send(message); // Trimite mesajul utilizând mailSender
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Tratare excepții sau notificare despre eșecul trimitere emailului
         }
     }
 }

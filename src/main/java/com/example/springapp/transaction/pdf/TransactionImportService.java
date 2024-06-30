@@ -12,17 +12,20 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.time.format.DateTimeParseException;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +48,30 @@ public class TransactionImportService {
     @Autowired
     private AccountRepository accountRepository;
 
+    private Map<String, Set<String>> categoryKeywords = new HashMap<>();
+
+    public TransactionImportService() {
+        loadCategoryKeywords();
+    }
+
+    private void loadCategoryKeywords() {
+        String[] categories = {"salariu", "transport", "cumparaturi", "facturi", "taxe"};
+        for (String category : categories) {
+            try {
+                InputStream resource = new ClassPathResource(category + ".txt").getInputStream();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(resource));
+                String line;
+                Set<String> keywords = new HashSet<>();
+                while ((line = reader.readLine()) != null) {
+                    keywords.add(line.trim().toLowerCase());
+                }
+                categoryKeywords.put(category, keywords);
+            } catch (IOException e) {
+                log.error("Failed to load keywords for category: " + category, e);
+            }
+        }
+    }
+
     public void importPdf(MultipartFile file, String userName) throws IOException {
         InputStream inputStream = null;
         PDDocument document = null;
@@ -60,7 +87,7 @@ public class TransactionImportService {
             Optional<UserEntity> currentUserOpt = userService.getCurrentUser();
             if (!currentUserOpt.isPresent()) {
                 log.error("User not found: {}", userName);
-                return;
+                throw new IOException("User not found: " + userName);
             }
             UserEntity currentUser = currentUserOpt.get();
 
@@ -70,21 +97,45 @@ public class TransactionImportService {
             pdfRepository.save(pdfEntity);
 
             // Get the account with name "Raiffaisen"
-            Account raiffaisenAccount = accountRepository.findByNameAndUser("Raiffaisen",currentUser);
+            Account raiffaisenAccount = accountRepository.findByNameAndUser("Raiffaisen", currentUser);
             if (raiffaisenAccount == null) {
-                log.error("Account with name 'Raiffaisen' not found.");
-                return;
+                log.info("Account with name 'Raiffaisen' not found. We will create it!");
+                raiffaisenAccount = new Account();
+                raiffaisenAccount.setName("Raiffaisen");
+                raiffaisenAccount.setUser(currentUser);
+                raiffaisenAccount.setCurrentBalance(0.0); // Inițializare sold cu 0.0
+                raiffaisenAccount.setPaymentTypes(Arrays.asList("Debit Card"));
+                accountRepository.save(raiffaisenAccount);
             }
+
+            // Extract initial balance from the text
+            Double initialBalance = extractInitialBalance(text);
+            if (initialBalance == null) {
+                log.error("Failed to extract initial balance.");
+                throw new IOException("Failed to extract initial balance.");
+            }
+
+            log.info("Initial balance extracted: {}", initialBalance);
+
+            // Reset account balance to initial balance
+            raiffaisenAccount.setCurrentBalance(initialBalance);
+            accountRepository.save(raiffaisenAccount);
 
             // Extract transactions from the text
-            List<Transaction> transactions = extractTransactions(text, currentUser, raiffaisenAccount);
+            List<Transaction> transactions = extractTransactions(text, currentUser, raiffaisenAccount, initialBalance);
 
+            // Process each transaction using the addTransaction method from TransactionService
             for (Transaction transaction : transactions) {
                 if (transaction != null) {
-                    log.info("Adding transaction: {}", transaction);
-                    transactionService.addTransaction(transaction, userName);
+                    Map<String, String> response = transactionService.addTransaction(transaction, userName);
+                    if (response.containsKey("error")) {
+                        throw new IOException(response.get("error"));
+                    }
                 }
             }
+        } catch (Exception e) {
+            log.error("Error importing PDF", e);
+            throw new IOException("Error importing PDF: " + e.getMessage());
         } finally {
             if (document != null) {
                 document.close();
@@ -95,7 +146,7 @@ public class TransactionImportService {
         }
     }
 
-    private List<Transaction> extractTransactions(String text, UserEntity currentUser, Account account) {
+    private List<Transaction> extractTransactions(String text, UserEntity currentUser, Account account, Double initialBalance) {
         List<Transaction> transactions = new ArrayList<>();
 
         // Split the text into lines
@@ -153,22 +204,25 @@ public class TransactionImportService {
         Double[] amounts = extractAmounts(transactionDetails);
 
         String categoryName = determineCategory(description);
-        Category categoryType = categoryRepository.findByName(categoryName);
+        Category categoryType = categoryRepository.findByNameAndUserId(categoryName, currentUser);
         if (categoryType == null) {
             categoryType = new Category();
             categoryType.setName(categoryName);
+            categoryType.setUserId(currentUser);
             categoryRepository.save(categoryType);
         }
 
         Transaction debitTransaction = null;
         Transaction creditTransaction = null;
+        long transactionDate = convertDateToLong(date);
+
         if (amounts[0] != null) {
-            categoryType.setType("cheltuiala");
-            debitTransaction = new Transaction(amounts[0], description, "debit", convertDateToLong(date), categoryType, account, currentUser);
+            categoryType.setType("expense");
+            debitTransaction = new Transaction(amounts[0], description, "debit", transactionDate, categoryType, account, currentUser);
         }
         if (amounts[1] != null) {
-            categoryType.setType("venit");
-            creditTransaction = new Transaction(amounts[1], description, "credit", convertDateToLong(date), categoryType, account, currentUser);
+            categoryType.setType("income");
+            creditTransaction = new Transaction(amounts[1], description, "credit", transactionDate, categoryType, account, currentUser);
         }
 
         log.info("Created transaction: {}", debitTransaction != null ? debitTransaction : creditTransaction);
@@ -197,24 +251,47 @@ public class TransactionImportService {
 
     private String determineCategory(String description) {
         description = description.toLowerCase();
-        if (description.contains("rata")) {
-            return "loan";
-        } else if (description.contains("transfer")) {
-            return "transfer";
-        } else if (description.contains("plata")) {
-            return "payment";
-        } else if (description.contains("economii")) {
-            return "savings";
-        } else if (description.contains("card")) {
-            return "card payment";
-        } else {
-            return "other";
+        for (Map.Entry<String, Set<String>> entry : categoryKeywords.entrySet()) {
+            for (String keyword : entry.getValue()) {
+                if (description.contains(keyword)) {
+                    return entry.getKey();
+                }
+            }
         }
+        return "other";
     }
 
     private long convertDateToLong(String date) {
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd.MM.yyyy");
-        LocalDate localDate = LocalDate.parse(date, formatter);
-        return localDate.toEpochDay();
+        LocalDate localDate;
+        try {
+            localDate = LocalDate.parse(date, formatter);
+            log.info("Parsed date: {}", localDate);
+        } catch (DateTimeParseException e) {
+            log.error("Failed to parse date: {}. Setting to default date.", date);
+            localDate = LocalDate.of(2000, 1, 1); // Default date
+        }
+
+        LocalDateTime localDateTime = localDate.atTime(0, 0); // Adăugăm ora și minutele (00:00)
+
+        return localDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+    }
+
+    private Double extractInitialBalance(String text) {
+        Pattern initialBalancePattern = Pattern.compile("Sold final\\s+(\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?)");
+        Matcher matcher = initialBalancePattern.matcher(text);
+
+        if (matcher.find()) {
+            String balanceString = matcher.group(1).replaceAll(",", ""); // Îndepărtăm virgula din număr
+            try {
+                return Double.parseDouble(balanceString.trim());
+            } catch (NumberFormatException e) {
+                log.error("Failed to parse initial balance: {}", balanceString);
+            }
+        } else {
+            log.error("Initial balance not found in text.");
+        }
+
+        return null;
     }
 }

@@ -5,11 +5,13 @@ import com.example.springapp.category.CategoryService;
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import javax.mail.MessagingException;
+import javax.mail.internet.MimeMessage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
@@ -94,8 +96,8 @@ public class BudgetServiceImpl implements BudgetService {
         return budgetRepository.save(budget);
     }
 
-    @Scheduled(cron = "0 0 0 * * ?")
-    public void resetMonthlyBudgets() {
+    @Scheduled(cron = "0 29 18 * * ?")
+    public void resetMonthlyBudgets() throws MessagingException {
         List<Budget> budgets = budgetRepository.findAll();
         LocalDate currentDate = LocalDate.now();
 
@@ -119,12 +121,35 @@ public class BudgetServiceImpl implements BudgetService {
         }
     }
 
-    private void sendEmailNotification(Budget budget) {
-        SimpleMailMessage message = new SimpleMailMessage();
-        message.setTo(budget.getUser().getEmail());
-        message.setSubject("Budget Reset Notification");
-        message.setText("Your budget has been reset to its initial amount.");
+    private void sendEmailNotification(Budget budget) throws MessagingException {
 
-        mailSender.send(message);
+        MimeMessage message = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(message, true);
+
+        try {
+            helper.setTo(budget.getUser().getEmail()); // Setează destinatarul emailului
+            helper.setSubject("Notificare resetare buget"); // Setează subiectul emailului în română
+
+            // Construiește conținutul emailului
+            String emailContent = String.format(
+                    "<div>\n" +
+                            "    <span style=\"color:#5C6AC4;font-family: sans-serif;font-size:32px;\"><b>Paymint</b></span><br><br>\n" +
+                            "    <span style=\"font-family: sans-serif;\">Dragă " + budget.getUser().getFirstName() + ",</span><br><br>\n" +
+                            "    <span style=\"font-family: sans-serif;\">Acesta este un reminder că bugetul tău pentru categoria <b>" + budget.getCategory().getName() + "</b> a fost resetat la suma inițială de <b>" + budget.getInitialAmount() + " " + "</b>, la data de: <b>" + budget.getModifiedAt() + "</b>.</span><br><br>\n" +
+                            "    <span style=\"font-family: sans-serif;\">Te rugăm să gestionezi cheltuielile în conformitate cu noile planuri de bugetare.</span><br><br>\n" +
+                            "    <span style=\"font-family: sans-serif;\">Mulțumim,</span><br>\n" +
+                            "    <span style=\"font-family: sans-serif;\">Echipa Paymint</span>\n" +
+                            "</div>"
+
+            );
+
+            helper.setText(emailContent, true); // Setează conținutul emailului ca HTML
+
+            mailSender.send(message); // Trimite mesajul utilizând mailSender
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Tratare excepții sau notificare despre eșecul trimitere emailului
+        }
     }
 }
+

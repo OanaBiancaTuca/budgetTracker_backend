@@ -147,7 +147,7 @@ public class ChatbotController {
         } else if (query.toLowerCase().contains("schimbă scadența datoriei")) {
             command = "Schimbă scadența datoriei";
         } else {
-            ChatGPTResponse aiResponse = openAIService.getOpenAIResponse(query);
+            ChatGPTResponse aiResponse = openAIService.getOpenAIResponse(query,user.getUserId());
             if (aiResponse != null && !aiResponse.getChoices().isEmpty()) {
                 return aiResponse.getChoices().get(0).getMessage().getContent();
             } else {

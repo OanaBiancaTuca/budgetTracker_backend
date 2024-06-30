@@ -11,13 +11,13 @@ import java.util.Date;
 import java.util.List;
 
 @Repository
-public interface TransactionRepository extends JpaRepository<Transaction,Integer> {
+public interface TransactionRepository extends JpaRepository<Transaction, Integer> {
     List<Transaction> findAllByUser(UserEntity user);
 
 
     List<Transaction> findAllByAccount(Account account);
-    
-    @Query(value="select * from transaction where category_category_id=?1", nativeQuery = true)
+
+    @Query(value = "select * from transaction where category_category_id=?1", nativeQuery = true)
     List<Transaction> findByCategory(Integer id);
 
     @Query(value = "SELECT\n" +
@@ -43,7 +43,7 @@ public interface TransactionRepository extends JpaRepository<Transaction,Integer
             "        FROM_UNIXTIME(t.date_time/1000) >= DATE_SUB(DATE_FORMAT(NOW(), '%Y-%m-01'), INTERVAL 5 MONTH)\n" +
             "    GROUP BY month\n" +
             ") AS data ON subquery.month = data.month\n" +
-            "ORDER BY subquery.rn DESC;" ,nativeQuery = true)
+            "ORDER BY subquery.rn DESC;", nativeQuery = true)
     List<Object[]> getMonthlyData(Integer userId);
 
 
@@ -61,7 +61,7 @@ public interface TransactionRepository extends JpaRepository<Transaction,Integer
             "GROUP BY " +
             "c.name " +
             "ORDER BY " +
-            "expenses DESC;" ,nativeQuery = true)
+            "expenses DESC;", nativeQuery = true)
     List<Object[]> getThisMonthExpenses(Integer userId);
 
     @Query(value = "SELECT " +
@@ -78,7 +78,7 @@ public interface TransactionRepository extends JpaRepository<Transaction,Integer
             "GROUP BY " +
             "c.name " +
             "ORDER BY " +
-            "income DESC;" ,nativeQuery = true)
+            "income DESC;", nativeQuery = true)
     List<Object[]> getThisMonthIncome(Integer userId);
 
     @Query(value = "SELECT\n" +
@@ -90,7 +90,7 @@ public interface TransactionRepository extends JpaRepository<Transaction,Integer
             "WHERE\n" +
             "    t.user_id = ?1\n" +
             "    AND MONTH(FROM_UNIXTIME(t.date_time/1000)) = MONTH(NOW())\n" +
-            "    AND YEAR(FROM_UNIXTIME(t.date_time/1000)) = YEAR(NOW());",nativeQuery = true)
+            "    AND YEAR(FROM_UNIXTIME(t.date_time/1000)) = YEAR(NOW());", nativeQuery = true)
     List<Object[]> getThisMonthTotalIncomeAndExpenses(Integer userId);
 
     @Query(value = "SELECT " +
@@ -103,4 +103,7 @@ public interface TransactionRepository extends JpaRepository<Transaction,Integer
             "GROUP BY c.type " +
             "ORDER BY c.type", nativeQuery = true)
     List<Object[]> getLastSixMonthsIncome(@Param("userId") Integer userId, @Param("sixMonthsAgo") Date sixMonthsAgo);
+
+    List<Transaction> findTop10ByUser_UserIdOrderByAmountDesc(Integer userId);
+    
 }
