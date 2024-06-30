@@ -2,6 +2,8 @@ package com.example.springapp.transaction;
 
 import com.example.springapp.account.Account;
 import com.example.springapp.user.UserEntity;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,6 +15,8 @@ import java.util.List;
 @Repository
 public interface TransactionRepository extends JpaRepository<Transaction, Integer> {
     List<Transaction> findAllByUser(UserEntity user);
+
+    Page<Transaction> findAllByUser(UserEntity user, Pageable pageable);
 
 
     List<Transaction> findAllByAccount(Account account);
@@ -93,14 +97,26 @@ public interface TransactionRepository extends JpaRepository<Transaction, Intege
             "    AND YEAR(FROM_UNIXTIME(t.date_time/1000)) = YEAR(NOW());", nativeQuery = true)
     List<Object[]> getThisMonthTotalIncomeAndExpenses(Integer userId);
 
+//    @Query(value = "SELECT " +
+//            "c.type AS type, " +
+//            "COALESCE(SUM(t.amount), 0) AS total " +
+//            "FROM transaction t " +
+//            "JOIN category c ON t.category_category_id = c.category_id " +
+//            "WHERE t.user_id = :userId " +
+//            "AND FROM_UNIXTIME(t.date_time / 1000) >= :sixMonthsAgo " +
+//            "GROUP BY c.type " +
+//            "ORDER BY c.type", nativeQuery = true)
+//    List<Object[]> getLastSixMonthsIncome(@Param("userId") Integer userId, @Param("sixMonthsAgo") Date sixMonthsAgo);
+
     @Query(value = "SELECT " +
             "c.type AS type, " +
-            "COALESCE(SUM(t.amount), 0) AS total " +
+            "COALESCE(SUM(t.amount), 0) AS total, " +
+            "DATE_FORMAT(FROM_UNIXTIME(t.date_time / 1000), '%Y-%m') AS month " +
             "FROM transaction t " +
             "JOIN category c ON t.category_category_id = c.category_id " +
             "WHERE t.user_id = :userId " +
             "AND FROM_UNIXTIME(t.date_time / 1000) >= :sixMonthsAgo " +
-            "GROUP BY c.type " +
+            "GROUP BY c.type, month " +
             "ORDER BY c.type", nativeQuery = true)
     List<Object[]> getLastSixMonthsIncome(@Param("userId") Integer userId, @Param("sixMonthsAgo") Date sixMonthsAgo);
 

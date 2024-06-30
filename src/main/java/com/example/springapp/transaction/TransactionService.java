@@ -10,6 +10,9 @@ import com.example.springapp.category.CategoryService;
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
@@ -44,6 +47,17 @@ public class TransactionService {
             return transactionList;
         } catch (UsernameNotFoundException e) {
             return null;
+        }
+    }
+
+    //  metodă de paginare
+    public Page<Transaction> getTransactionsByUserNameWithPagination(String userName, int page, int size) {
+        try {
+            UserEntity user = userRepository.findByEmail(userName).orElseThrow();
+            Pageable pageable = PageRequest.of(page, size);
+            return transactionRepository.findAllByUser(user, pageable);
+        } catch (UsernameNotFoundException e) {
+            return Page.empty();
         }
     }
 

@@ -1,18 +1,20 @@
 import sys
 
 def main():
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 4:
         print(
-            "Usage: python predict.py <model_path> <monthly_savings_per_goal> <target_amount1> <target_amount2> ... <target_amountN>")
+            "Usage: python predict.py <model_path> <monthly_savings_per_goal> <months_with_data> <target_amount1> <target_amount2> ... <target_amountN>")
         sys.exit(1)
 
     model_path = sys.argv[1]
     monthly_savings_per_goal = float(sys.argv[2])
-    target_amounts = [float(arg) for arg in sys.argv[3:]]
+    months_with_data = int(sys.argv[3])
+    target_amounts = [float(arg) for arg in sys.argv[4:]]
 
     # Debug information
     debug_info = []
     debug_info.append(f"Monthly Savings per Goal: {monthly_savings_per_goal}")
+    debug_info.append(f"Months with Data: {months_with_data}")
     debug_info.append(f"Target Amounts: {target_amounts}")
 
     predictions = []

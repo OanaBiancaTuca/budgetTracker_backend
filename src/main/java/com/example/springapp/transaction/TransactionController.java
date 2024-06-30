@@ -5,6 +5,7 @@ import com.example.springapp.config.auth.JWTGenerator;
 import com.example.springapp.transaction.pdf.TransactionImportService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +31,18 @@ public class TransactionController {
         List<Transaction> transactions = transactionService.getTransactionsByUserName(userName);
         return new BaseResponceDto("success", transactions);
     }
+
+    // Noua metodă de paginare
+    @GetMapping("/api/transactions/paginated")
+    public BaseResponceDto getTransactionsPaginated(
+            @RequestHeader(value = "Authorization", defaultValue = "") String token,
+            @RequestParam int page,
+            @RequestParam int size) {
+        String userName = jwtGenerator.getUsernameFromJWT(jwtGenerator.getTokenFromHeader(token));
+        Page<Transaction> transactions = transactionService.getTransactionsByUserNameWithPagination(userName, page, size);
+        return new BaseResponceDto("success", transactions.getContent());
+    }
+
 
     @PostMapping("/api/transactions")
     public BaseResponceDto addTransactions(@RequestHeader(value = "Authorization", defaultValue = "") String token, @RequestBody TransactionRequestDto transactionRequestDto) {

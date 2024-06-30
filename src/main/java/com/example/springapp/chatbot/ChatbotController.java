@@ -5,8 +5,13 @@ import com.example.springapp.debt.DebtEntity;
 import com.example.springapp.debt.DebtService;
 import com.example.springapp.goals.Goal;
 import com.example.springapp.goals.GoalsServiceImpl;
+import com.example.springapp.goals.PredictionService;
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserService;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.ResponseEntity;
@@ -15,19 +20,11 @@ import org.springframework.web.bind.annotation.*;
 import javax.annotation.PostConstruct;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.lang.reflect.Type;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
-
-import java.lang.reflect.Type;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/chatbot")
@@ -49,6 +46,8 @@ public class ChatbotController {
 
     @Autowired
     private OpenAIService openAIService;
+    @Autowired
+    PredictionService predictionService;
 
     private Map<String, String> commonQuestions;
 
@@ -162,7 +161,7 @@ public class ChatbotController {
         return "Comanda nu este recunoscută.";
     }
 
-    private String handleStep(String query, CommandContext context, UserEntity user) {
+    private String handleStep(String query, CommandContext context, UserEntity user) throws IOException, InterruptedException {
         String command = context.getCurrentCommand();
         if (command.equals("Adaugă obiectiv")) {
             return handleAddGoalStep(query, context, user);
@@ -180,7 +179,7 @@ public class ChatbotController {
         return "Comanda nu este recunoscută.";
     }
 
-    private String handleAddGoalStep(String query, CommandContext context, UserEntity user) {
+    private String handleAddGoalStep(String query, CommandContext context, UserEntity user) throws IOException, InterruptedException {
         int step = context.getStep();
         if (step == 1) {
             context.addStepData("name", query);
@@ -203,7 +202,41 @@ public class ChatbotController {
                 goal.setTargetAmount(Double.parseDouble(context.getStepData("amount")));
                 goal.setTargetDate(dateFormat.parse(context.getStepData("targetDate")).getTime());
                 goal.setUser(user);
-                String result = goalsServiceImpl.createGoal(goal) != null ? "Obiectiv adăugat cu succes." : "Eroare la adăugarea obiectivului.";
+
+                // Salvează noul obiectiv
+                Optional<Goal> createdGoal = Optional.ofNullable(goalsServiceImpl.createGoal(goal));
+
+                // Obține toate obiectivele utilizatorului
+                List<Goal> goals = goalsServiceImpl.getAllGoalsByUser(user);
+
+                // Filtrează obiectivele care sunt în Pending
+                List<Goal> pendingGoals = goals.stream()
+                        .filter(g -> "Pending".equalsIgnoreCase(g.getStatus()))
+                        .collect(Collectors.toList());
+
+                // Obține predicțiile pentru obiectivele în Pending
+                List<Double> times = predictionService.predictGoalAchievementTime(goal.getUser().getUserId(), pendingGoals);
+
+                // Verifică dacă numărul de predicții corespunde cu numărul de obiective în Pending
+                if (times.size() != pendingGoals.size()) {
+                    System.err.println("Number of predictions does not match number of goals.");
+                    return "Eroare la calcularea predictiei";
+                }
+
+                // Actualizează obiectivele cu predicțiile calculate
+                for (int i = 0; i < pendingGoals.size(); i++) {
+                    Goal g = pendingGoals.get(i);
+                    g.setPrediction((int) Math.ceil(times.get(i) * 30)); // Convert months to days
+                    goalsServiceImpl.updateGoal(g.getId(), g);
+                }
+
+                createdGoal = goalsServiceImpl.getGoal(createdGoal.get().getId());
+                String result = createdGoal != null ?
+                        "Obiectiv adăugat cu succes. Pe baza cheltuielilor si veniturilor tale consider ca acesta va fi realizat in aproximativ " +
+                                (createdGoal.get().getPrediction() / 30) +  // Divides days by 30 to get approximate months
+                                " luni" :
+                        "Eroare la adăugarea obiectivului.";
+
                 context.reset();
                 return result;
             } catch (ParseException e) {

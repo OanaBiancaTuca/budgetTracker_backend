@@ -9,7 +9,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Paths;
 import java.util.*;
-
 @Service
 public class PredictionService {
 
@@ -25,18 +24,25 @@ public class PredictionService {
 
         double totalIncome = 0;
         double totalExpenses = 0;
-        int monthsWithData = transactionsData.size() > 0 ? transactionsData.size() : 1;  // pentru a preveni diviziunea cu zero
+
+        // Set pentru a ține evidența lunilor unice cu tranzacții
+        Set<String> uniqueMonths = new HashSet<>();
 
         for (Object[] data : transactionsData) {
             String type = (String) data[0];
             double total = Double.parseDouble(data[1].toString());
+            String month = (String) data[2]; // Extrage luna din rezultat
 
             if (type.equals("income")) {
                 totalIncome += total;
             } else if (type.equals("expense")) {
                 totalExpenses += total;
             }
+
+            uniqueMonths.add(month);
         }
+
+        int monthsWithData = uniqueMonths.size() > 0 ? uniqueMonths.size() : 1; // pentru a preveni diviziunea cu zero
 
         double averageMonthlyIncome = totalIncome / monthsWithData;
         double averageMonthlyExpenses = totalExpenses / monthsWithData;
@@ -70,7 +76,7 @@ public class PredictionService {
         String modelPath = Paths.get("D:\\Disertatie\\paymint-web-app-main\\paymint-web-app-main\\springapp\\src\\main\\resources\\goal_prediction_model.pkl").toAbsolutePath().toString();
 
         // Pregătește comanda cu toate sumele țintă
-        StringBuilder commandBuilder = new StringBuilder(String.format("python %s %s %f", scriptPath, modelPath, monthlySavingsPerGoal));
+        StringBuilder commandBuilder = new StringBuilder(String.format("python %s %s %f %d", scriptPath, modelPath, monthlySavingsPerGoal, monthsWithData));
         for (double targetAmount : targetAmounts) {
             commandBuilder.append(" ").append(targetAmount);
         }
@@ -110,7 +116,6 @@ public class PredictionService {
 
         String errors = errorBuilder.toString().trim();
 
-        // Afișează erorile
         if (!errors.isEmpty()) {
             System.err.println("Errors from the Python script: " + errors);
         }
@@ -118,7 +123,7 @@ public class PredictionService {
         // Afișează predicțiile
         System.out.println("Predictions from Python script: " + predictions);
 
-        // Asigură-te că numărul de predicții se potrivește cu numărul de obiective în Pending
+        // verificare că numărul de predicții se potrivește cu numărul de obiective în Pending
         if (predictions.size() != targetAmounts.size()) {
             throw new IllegalStateException("Number of predictions does not match number of pending goals.");
         }
