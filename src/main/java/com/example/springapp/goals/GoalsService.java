@@ -16,4 +16,6 @@ public interface GoalsService {
 
 
     List<Goal> getAllGoalsByUser(UserEntity user);
+
+
 }

@@ -41,12 +41,12 @@ public class AccountService {
             List<Account> accountList= accountRepository.findAllByUserAndIsDeletedFalse(user);
             List<AccountResponseDto> accountResponseDtoList = new ArrayList<>();
             for (Account account: accountList
-                 ) {
+            ) {
                 double totalExpenses =0;
                 double totalIncome =0;
                 List<Transaction> transactionList = transactionService.getTransactionsByAccount(userName,account);
                 for (Transaction transaction: transactionList
-                     ) {
+                ) {
                     if(transaction.getCategory().getType().equals("expense")){
                         totalExpenses += transaction.getAmount();
                     } else if (transaction.getCategory().getType().equals("income")) {

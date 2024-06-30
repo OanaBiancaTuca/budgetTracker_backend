@@ -4,6 +4,24 @@ public class BudgetRequestDto {
 
     private int categoryId;
     private  double amount;
+    private Long used;
+    private Long balance;
+
+    public Long getUsed() {
+        return used;
+    }
+
+    public void setUsed(Long used) {
+        this.used = used;
+    }
+
+    public Long getBalance() {
+        return balance;
+    }
+
+    public void setBalance(Long balance) {
+        this.balance = balance;
+    }
 
     public int getCategoryId() {
         return categoryId;
@@ -20,4 +38,6 @@ public class BudgetRequestDto {
     public void setAmount(double amount) {
         this.amount = amount;
     }
+
+
 }

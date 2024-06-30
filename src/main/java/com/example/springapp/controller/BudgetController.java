@@ -90,18 +90,16 @@ public class BudgetController {
         return ResponseEntity.ok(new BaseResponceDto("success"));
     }
 
-        //Test Case
-        @GetMapping("/budget")
-        public ResponseEntity<List<Account>> getAllBudget () {
-            List<Account> accounts = new ArrayList<>();
-            return ResponseEntity.ok(accounts);
-        }
-
-        //Test Case
-        @GetMapping("/budget/{id}")
-        public ResponseEntity<List<Account>> getBudgetById (@PathVariable Integer id){
-            List<Account> accounts = new ArrayList<>();
-            return ResponseEntity.ok(accounts);
+    //API EndPoint for Updating the budget time
+    @PostMapping("/api/budgets/{budgetId}/reset")
+    public ResponseEntity<?> updateBudgetTime(@PathVariable Long budgetId, @RequestBody BudgetRequestDto budgetRequestDto) {
+        try {
+            Budget updatedBudget = budgetService.updateBudgetTime(budgetId, budgetRequestDto);
+            return ResponseEntity.ok(new BaseResponceDto("success", updatedBudget));
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Budget not found");
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error updating budget time");
         }
     }
-
+}

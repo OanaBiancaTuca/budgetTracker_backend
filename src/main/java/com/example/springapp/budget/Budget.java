@@ -5,6 +5,7 @@ import com.example.springapp.category.Category;
 import com.example.springapp.user.UserEntity;
 
 import javax.persistence.*;
+import java.time.LocalDateTime;
 import java.util.Objects;
 
 @Entity
@@ -16,22 +17,54 @@ public class Budget {
     @ManyToOne
     @JoinColumn(name = "category_id")
     private Category category;
+
     private double amount;
+    private Long used;
+    private Long balance;
+
+    private Long initialAmount;
+    private LocalDateTime modifiedAt;
+
     @ManyToOne
     @JoinColumn(name = "user_id")
     private UserEntity user;
 
-    private Long used;
-
-    private Long balance;
-
     public Budget() {
-
     }
 
-    public Budget(Category category, double amount, UserEntity user) {
-        this.category = category;
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long budgetId) {
+        this.id = budgetId;
+    }
+
+    public void setAmount(Long amount) {
         this.amount = amount;
+    }
+
+    public Long getInitialAmount() {
+        return initialAmount;
+    }
+
+    public void setInitialAmount(Long initialAmount) {
+        this.initialAmount = initialAmount;
+    }
+
+    public LocalDateTime getModifiedAt() {
+        return modifiedAt;
+    }
+
+    public void setModifiedAt(LocalDateTime modifiedAt) {
+        this.modifiedAt = modifiedAt;
+    }
+
+    public UserEntity getUser() {
+        return user;
+    }
+
+    public void setUser(UserEntity user) {
         this.user = user;
     }
 
@@ -41,6 +74,8 @@ public class Budget {
         this.user = user;
         this.used = used;
         this.balance = balance;
+        this.initialAmount = (long) amount;
+        this.modifiedAt = LocalDateTime.now();
     }
 
     //Getters and Setters
@@ -63,14 +98,6 @@ public class Budget {
 
     }
 
-    public Long getId() {
-        return id;
-    }
-
-    public void setId(Long id) {
-        this.id = id;
-    }
-
     public Category getCategory() {
         return category;
     }
@@ -87,13 +114,5 @@ public class Budget {
         this.amount = amount;
     }
 
-    /*@Override
-    public String toString() {
-        return "Budget{" +
-                "id=" + id +
-                ", budgetId='" + budgetId + '\'' +
-                ", category=" + category +
-                ", amount=" + amount +
-                '}';
-    }*/
+
 }

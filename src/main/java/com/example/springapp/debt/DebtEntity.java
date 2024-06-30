@@ -1,16 +1,13 @@
 package com.example.springapp.debt;
 
 import com.example.springapp.user.UserEntity;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
 import javax.persistence.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 @Entity
-//@Data
-//@AllArgsConstructor
-//@NoArgsConstructor
 public class DebtEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -83,6 +80,14 @@ public class DebtEntity {
         this.dueDate = dueDate;
         this.moneyFrom = moneyFrom;
         this.status = status;
+    }
+
+    public void resetForNextMonth() {
+        this.status = "unpaid";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.ENGLISH);
+        LocalDate localDate = LocalDate.parse(this.dueDate, formatter);
+        localDate = localDate.plusMonths(1);
+        this.dueDate = localDate.format(formatter);
     }
 
     @Override

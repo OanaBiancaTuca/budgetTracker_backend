@@ -5,7 +5,6 @@ import com.example.springapp.user.UserEntity;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import javax.persistence.*;
-import java.util.Date;
 
 @Entity
 public class Goal {
@@ -19,6 +18,8 @@ public class Goal {
     private String status;
 
     private Long targetDate;
+    // numbers of day for prediction
+    private int prediction;
 
     @ManyToOne
     @JoinColumn(name = "user_id")
@@ -90,6 +91,14 @@ public class Goal {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public int getPrediction() {
+        return prediction;
+    }
+
+    public void setPrediction(int prediction) {
+        this.prediction = prediction;
     }
 
     @Override

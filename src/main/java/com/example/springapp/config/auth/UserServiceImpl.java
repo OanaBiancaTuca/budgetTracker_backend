@@ -1,29 +1,30 @@
 package com.example.springapp.config.auth;
 
 import com.example.springapp.BaseResponceDto;
+import com.example.springapp.category.Category;
+import com.example.springapp.category.CategoryRepository;
 import com.example.springapp.user.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 
 import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Random;
+import java.util.Optional;
 
 @Service
 public class UserServiceImpl implements UserService {
@@ -40,6 +41,8 @@ public class UserServiceImpl implements UserService {
 	private JavaMailSender mailSender;
 	@Autowired
 	private OTPStorage otpStorage;
+	@Autowired
+	private CategoryRepository categoryRepository;
 	@Override
 	public ResponseEntity<BaseResponceDto> register(UserEntity user) {
 		if(userRepository.existsByEmail(user.getEmail())) {
@@ -47,8 +50,26 @@ public class UserServiceImpl implements UserService {
 		}
 		
 		user.setPassword(passwordEncoder.encode((user.getPassword())));
-		userRepository.save(user);
+		UserEntity savedUser = userRepository.save(user);
+		createDefaultCategories(savedUser);
 		return new ResponseEntity<>(new BaseResponceDto("success",null), HttpStatus.OK);
+	}
+	private void createDefaultCategories(UserEntity user) {
+		String[][] defaultCategories = {
+				{"Salariu", "income"},
+				{"Transport", "expense"},
+				{"Cumparaturi", "expense"},
+				{"Facturi", "expense"},
+				{"Taxe", "expense"}
+		};
+
+		for (String[] categoryData : defaultCategories) {
+			Category category = new Category();
+			category.setName(categoryData[0]);
+			category.setType(categoryData[1]);
+			category.setUserId(user); // Asociați categoria cu utilizatorul
+			categoryRepository.save(category);
+		}
 	}
 
 	@Override
@@ -142,4 +163,19 @@ public class UserServiceImpl implements UserService {
 		data.put("token",token);
         return ResponseEntity.ok(new BaseResponceDto("success",data));
 	}
+
+	@Override
+	public Optional<UserEntity> getCurrentUser() {
+		Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+		String username;
+
+		if (principal instanceof UserDetails) {
+			username = ((UserDetails) principal).getUsername();
+		} else {
+			username = principal.toString();
+		}
+
+		return userRepository.findByEmail(username);
+	}
+
 }

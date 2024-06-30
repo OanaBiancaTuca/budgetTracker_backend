@@ -150,4 +150,28 @@ public class Transaction implements Comparable<Transaction> {
         return this.createdAt.compareTo(other.getCreatedAt());
     }
 
+    public boolean isDeleted() {
+        return isDeleted;
+    }
+
+    public void setDeleted(boolean deleted) {
+        isDeleted = deleted;
+    }
+
+    @Override
+    public String toString() {
+        return "Transaction{" +
+                "id=" + id +
+                ", amount=" + amount +
+                ", description='" + description + '\'' +
+                ", paymentType='" + paymentType + '\'' +
+                ", category=" + category +
+                ", account=" + account +
+                ", user=" + user +
+                ", isDeleted=" + isDeleted +
+                ", dateTime=" + dateTime +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                '}';
+    }
 }

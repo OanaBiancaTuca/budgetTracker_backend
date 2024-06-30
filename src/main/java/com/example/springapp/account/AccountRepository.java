@@ -12,4 +12,6 @@ public interface AccountRepository extends JpaRepository<Account,Integer> {
     List<Account> findAllByUser(UserEntity user);
 
     List<Account> findAllByUserAndIsDeletedFalse(UserEntity user);
+
+    Account findByNameAndUser(String raiffaisen,UserEntity user);
 }
