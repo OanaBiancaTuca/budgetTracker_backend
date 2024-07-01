@@ -138,4 +138,40 @@ public class PredictionService {
 
         return predictions;
     }
+
+
+    public Map<String, Double> getFinancialDetails(Integer userId) throws IOException, InterruptedException {
+        List<Object[]> transactionsData = transactionService.getTransactionForLastSixMonths(userId);
+
+        double totalIncome = 0;
+        double totalExpenses = 0;
+        Set<String> uniqueMonths = new HashSet<>();
+
+        for (Object[] data : transactionsData) {
+            String type = (String) data[0];
+            double total = Double.parseDouble(data[1].toString());
+            String month = (String) data[2];
+
+            if (type.equals("income")) {
+                totalIncome += total;
+            } else if (type.equals("expense")) {
+                totalExpenses += total;
+            }
+            uniqueMonths.add(month);
+        }
+
+        int monthsWithData = uniqueMonths.size() > 0 ? uniqueMonths.size() : 1;
+
+        double averageMonthlyIncome = totalIncome / monthsWithData;
+        double averageMonthlyExpenses = totalExpenses / monthsWithData;
+        double monthlySavings = averageMonthlyIncome - averageMonthlyExpenses;
+
+        Map<String, Double> financialDetails = new HashMap<>();
+        financialDetails.put("averageMonthlyIncome", averageMonthlyIncome);
+        financialDetails.put("averageMonthlyExpenses", averageMonthlyExpenses);
+        financialDetails.put("monthlySavings", monthlySavings);
+
+        return financialDetails;
+    }
 }
+

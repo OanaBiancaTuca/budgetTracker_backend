@@ -144,6 +144,9 @@ public class BudgetServiceImpl implements BudgetService {
             );
 
             helper.setText(emailContent, true); // Setează conținutul emailului ca HTML
+            String fromAddress = "paymint.ltd@outlook.com";
+            String senderName = "Paymint Team";
+            helper.setFrom(fromAddress, senderName);
 
             mailSender.send(message); // Trimite mesajul utilizând mailSender
         } catch (Exception e) {

@@ -2,10 +2,7 @@ package com.example.springapp.controller;
 
 import com.example.springapp.BaseResponceDto;
 import com.example.springapp.config.auth.JWTGenerator;
-import com.example.springapp.goals.Goal;
-import com.example.springapp.goals.GoalsRepository;
-import com.example.springapp.goals.GoalsService;
-import com.example.springapp.goals.PredictionService;
+import com.example.springapp.goals.*;
 import com.example.springapp.user.UserEntity;
 import com.example.springapp.user.UserRepository;
 import org.springframework.http.HttpStatus;
@@ -15,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -67,9 +65,21 @@ public class GoalsController {
             g.setPrediction((int) Math.ceil(times.get(i) * 30)); // Convert months to days
             goalsService.updateGoal(g.getId(), g);
         }
+        // Obține informațiile de la PredictionService
+        Map<String, Double> financialDetails = predictionService.getFinancialDetails(goal.getUser().getUserId());
+
+        double averageMonthlyIncome = financialDetails.get("averageMonthlyIncome");
+        double averageMonthlyExpenses = financialDetails.get("averageMonthlyExpenses");
+        double monthlySavings = financialDetails.get("monthlySavings");
 
         createdGoal = goalsRepository.findById(createdGoal.get().getId());
-        return ResponseEntity.ok(new BaseResponceDto("success", createdGoal.get().getPrediction()));
+        PredictionResponse response = new PredictionResponse(
+                averageMonthlyIncome,
+                averageMonthlyExpenses,
+                monthlySavings,
+                createdGoal.get().getPrediction()
+        );
+        return ResponseEntity.ok(new BaseResponceDto("success", response));
     }
 
     // API EndPoint for Updating the existing a Goal
