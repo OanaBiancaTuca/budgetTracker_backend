@@ -13,7 +13,7 @@ public class SchedulingConfig {
     @Autowired
     private DebtService debtService;
 
-    @Scheduled(cron = "0 46 18 * * ?")
+    @Scheduled(cron = "0 54 18 * * ?")
     public void scheduleDebtReset() throws MessagingException {
         debtService.resetDebts();
     }

@@ -109,7 +109,7 @@ public class DebtService {
         return debtR.findById(dId).get();
     }
 
-    @Scheduled(cron = "0 44 17 * * ?")
+    @Scheduled(cron = "0 54 18 * * ?")
     public void checkDueDatesAndNotify() throws MessagingException, UnsupportedEncodingException {
         LocalDate today = LocalDate.now();
         LocalDate twoDaysLater = today.plusDays(2);

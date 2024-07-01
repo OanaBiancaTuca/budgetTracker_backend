@@ -122,7 +122,7 @@ public class TransactionImportService {
             accountRepository.save(raiffaisenAccount);
 
             // Extract transactions from the text
-            List<Transaction> transactions = extractTransactions(text, currentUser, raiffaisenAccount, initialBalance);
+            List<Transaction> transactions = extractTransactions(text, currentUser, raiffaisenAccount);
 
             // Process each transaction using the addTransaction method from TransactionService
             for (Transaction transaction : transactions) {
@@ -146,7 +146,7 @@ public class TransactionImportService {
         }
     }
 
-    private List<Transaction> extractTransactions(String text, UserEntity currentUser, Account account, Double initialBalance) {
+    private List<Transaction> extractTransactions(String text, UserEntity currentUser, Account account) {
         List<Transaction> transactions = new ArrayList<>();
 
         // Split the text into lines
@@ -209,6 +209,12 @@ public class TransactionImportService {
             categoryType = new Category();
             categoryType.setName(categoryName);
             categoryType.setUserId(currentUser);
+            // Determine category type before saving
+            if (amounts[1] != null) {
+                categoryType.setType("income");
+            } else {
+                categoryType.setType("expense");
+            }
             categoryRepository.save(categoryType);
         }
 
@@ -217,11 +223,9 @@ public class TransactionImportService {
         long transactionDate = convertDateToLong(date);
 
         if (amounts[0] != null) {
-            categoryType.setType("expense");
             debitTransaction = new Transaction(amounts[0], description, "debit", transactionDate, categoryType, account, currentUser);
         }
         if (amounts[1] != null) {
-            categoryType.setType("income");
             creditTransaction = new Transaction(amounts[1], description, "credit", transactionDate, categoryType, account, currentUser);
         }
 
@@ -233,14 +237,16 @@ public class TransactionImportService {
         Double debit = null;
         Double credit = null;
         for (String detail : transactionDetails) {
-            if (detail.matches(".*\\d+\\.\\d{2}.*")) {
+            if (detail.matches(".*\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?.*")) {
                 String[] parts = detail.split(" ");
                 for (String part : parts) {
-                    if (part.matches("\\d+\\.\\d{2}")) {
+                    if (part.matches("\\d{1,3}(?:,\\d{3})*(?:\\.\\d{2})?")) {
+                        // Remove commas before parsing to double
+                        part = part.replace(",", "");
                         if (debit == null) {
-                            debit = Double.parseDouble(part.replaceAll("[^0-9.]", ""));
+                            debit = Double.parseDouble(part);
                         } else {
-                            credit = Double.parseDouble(part.replaceAll("[^0-9.]", ""));
+                            credit = Double.parseDouble(part);
                         }
                     }
                 }

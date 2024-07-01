@@ -16,3 +16,9 @@ clothing
 electronics
 zara
 reserved
+mohito
+profi
+stradivarius
+easybox
+altex
+pepco

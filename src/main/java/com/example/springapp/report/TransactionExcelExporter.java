@@ -28,7 +28,7 @@ public class TransactionExcelExporter {
     }
 
     private void writeHeaderLine() {
-        sheet = workbook.createSheet("Transactions");
+        sheet = workbook.createSheet("Transactii");
 
         Row row = sheet.createRow(0);
 
@@ -38,15 +38,15 @@ public class TransactionExcelExporter {
         font.setFontHeight(16);
         style.setFont(font);
 
-        createCell(row, 0, "Transaction ID", style);
-        createCell(row, 1, "Date", style);
-        createCell(row, 2, "Time", style);
-        createCell(row, 3, "Amount", style);
-        createCell(row, 4, "Category", style);
-        createCell(row, 5, "Type", style);
-        createCell(row, 6, "Description", style);
-        createCell(row, 7, "Account", style);
-        createCell(row, 8, "Payment Type", style);
+        createCell(row, 0, "Id Tranzactie", style);
+        createCell(row, 1, "Data", style);
+        createCell(row, 2, "Timpul", style);
+        createCell(row, 3, "Suma", style);
+        createCell(row, 4, "Categoria", style);
+        createCell(row, 5, "Tip tranzactie", style);
+        createCell(row, 6, "Descriere", style);
+        createCell(row, 7, "Cont", style);
+        createCell(row, 8, "Tipul platii", style);
 
     }
 
@@ -91,7 +91,9 @@ public class TransactionExcelExporter {
             createCell(row, columnCount++, formattedTime, style);
             createCell(row, columnCount++, transaction.getAmount(), style);
             createCell(row, columnCount++, transaction.getCategory().getName(), style);
-            createCell(row, columnCount++, transaction.getCategory().getType(), style);
+            String categoryTypeText = transaction.getCategory().getType().equals("expense") ?
+                    "Cheltuială" : transaction.getCategory().getType().equals("income") ? "Venit" : transaction.getCategory().getType();
+            createCell(row, columnCount++, categoryTypeText, style);
             createCell(row, columnCount++, transaction.getDescription(), style);
             createCell(row, columnCount++, transaction.getAccount().getName(), style);
             createCell(row, columnCount++, transaction.getPaymentType(), style);

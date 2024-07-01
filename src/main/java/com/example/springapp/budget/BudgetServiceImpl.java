@@ -14,7 +14,7 @@ import javax.mail.MessagingException;
 import javax.mail.internet.MimeMessage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.temporal.TemporalAdjusters;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 
@@ -96,27 +96,28 @@ public class BudgetServiceImpl implements BudgetService {
         return budgetRepository.save(budget);
     }
 
-    @Scheduled(cron = "0 29 18 * * ?")
+    @Scheduled(cron = "0 54 18 * * ?")
     public void resetMonthlyBudgets() throws MessagingException {
+// Obține toate bugetele din repository-ul de bugete
         List<Budget> budgets = budgetRepository.findAll();
+
+// Obține data curentă
         LocalDate currentDate = LocalDate.now();
 
+// Parcurge fiecare buget din lista de bugete
         for (Budget budget : budgets) {
+            // Obține data ultimei modificări a bugetului
             LocalDate modifiedDate = budget.getModifiedAt().toLocalDate();
-            int dayOfMonth = modifiedDate.getDayOfMonth();
-            LocalDate nextResetDate = currentDate.withDayOfMonth(dayOfMonth);
 
-            if (nextResetDate.getMonthValue() != currentDate.getMonthValue()) {
-                nextResetDate = currentDate.with(TemporalAdjusters.firstDayOfNextMonth());
-            }
-
-            if (currentDate.isEqual(nextResetDate)) {
-                budget.setAmount(budget.getInitialAmount());
-                budget.setUsed(0L);
-                budget.setBalance(budget.getInitialAmount());
-                budget.setModifiedAt(LocalDateTime.now());
-                budgetRepository.save(budget);
-                sendEmailNotification(budget);
+            // Verifică dacă au trecut 30 de zile de la ultima modificare
+            if (ChronoUnit.DAYS.between(modifiedDate, currentDate) >= 30) {
+                // Resetează bugetul
+                budget.setAmount(budget.getInitialAmount()); // Restabilește suma inițială
+                budget.setUsed(0L); // Resetează suma utilizată
+                budget.setBalance(budget.getInitialAmount()); // Resetează balanța
+                budget.setModifiedAt(LocalDateTime.now()); // Actualizează data modificării bugetului
+                budgetRepository.save(budget); // Salvează bugetul actualizat în repository
+                sendEmailNotification(budget); // Trimite o notificare prin email despre actualizarea bugetului
             }
         }
     }
@@ -128,8 +129,7 @@ public class BudgetServiceImpl implements BudgetService {
 
         try {
             helper.setTo(budget.getUser().getEmail()); // Setează destinatarul emailului
-            helper.setSubject("Notificare resetare buget"); // Setează subiectul emailului în română
-
+            helper.setSubject("Notificare resetare buget");
             // Construiește conținutul emailului
             String emailContent = String.format(
                     "<div>\n" +

@@ -25,21 +25,36 @@ public class ReportController {
     JWTGenerator jwtGenerator;
 
     @GetMapping("/api/report/transaction/excel")
-    public void transactionReportExcel(@RequestHeader(value = "Authorization", defaultValue = "") String token,HttpServletResponse httpServletResponse) throws IOException {
+    public void transactionReportExcel(@RequestHeader(value = "Authorization", defaultValue = "") String token, HttpServletResponse httpServletResponse) throws IOException {
         String userName = jwtGenerator.getUsernameFromJWT(jwtGenerator.getTokenFromHeader(token));
         httpServletResponse.setContentType("application/octet-stream");
         DateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
         String currentDateTime = dateFormatter.format(new Date());
 
         String headerKey = "Content-Disposition";
-        String headerValue = "attachment; filename=users_" + currentDateTime + ".xlsx";
+        String headerValue = "attachment; filename=transactions_" + currentDateTime + ".xlsx";
         httpServletResponse.setHeader(headerKey, headerValue);
 
         List<Transaction> transactionList = transactionService.getTransactionsByUserName(userName);
 
         TransactionExcelExporter transactionExcelExporter = new TransactionExcelExporter(transactionList);
-
         transactionExcelExporter.export(httpServletResponse);
+    }
 
+    @GetMapping("/api/report/transaction/pdf")
+    public void transactionReportPdf(@RequestHeader(value = "Authorization", defaultValue = "") String token, HttpServletResponse httpServletResponse) throws IOException {
+        String userName = jwtGenerator.getUsernameFromJWT(jwtGenerator.getTokenFromHeader(token));
+        httpServletResponse.setContentType("application/pdf");
+        DateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd_HH:mm:ss");
+        String currentDateTime = dateFormatter.format(new Date());
+
+        String headerKey = "Content-Disposition";
+        String headerValue = "attachment; filename=transactions_" + currentDateTime + ".pdf";
+        httpServletResponse.setHeader(headerKey, headerValue);
+
+        List<Transaction> transactionList = transactionService.getTransactionsByUserName(userName);
+
+        TransactionPdfExporter transactionPdfExporter = new TransactionPdfExporter(transactionList);
+        transactionPdfExporter.export(httpServletResponse);
     }
 }

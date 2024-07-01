@@ -74,7 +74,7 @@ public class GoalsController {
 
     // API EndPoint for Updating the existing a Goal
     @PutMapping("/api/goals/{id}")
-    public ResponseEntity<BaseResponceDto> updateGoal(@PathVariable("id") Long id, @RequestBody Goal goal) {
+    public ResponseEntity<BaseResponceDto> updateGoal(@PathVariable("id") Long id, @RequestBody Goal goal) throws IOException, InterruptedException {
         Goal updatedGoal = goalsService.updateGoal(id, goal);
         return ResponseEntity.ok(new BaseResponceDto("success", updatedGoal));
     }

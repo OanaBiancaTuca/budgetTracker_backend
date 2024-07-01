@@ -47,7 +47,7 @@ public class ChatbotController {
     @Autowired
     private OpenAIService openAIService;
     @Autowired
-    PredictionService predictionService;
+    private PredictionService predictionService;
 
     private Map<String, String> commonQuestions;
 
@@ -146,7 +146,7 @@ public class ChatbotController {
         } else if (query.toLowerCase().contains("schimbă scadența datoriei")) {
             command = "Schimbă scadența datoriei";
         } else {
-            ChatGPTResponse aiResponse = openAIService.getOpenAIResponse(query,user.getUserId());
+            ChatGPTResponse aiResponse = openAIService.getOpenAIResponse(query);
             if (aiResponse != null && !aiResponse.getChoices().isEmpty()) {
                 return aiResponse.getChoices().get(0).getMessage().getContent();
             } else {
@@ -239,6 +239,7 @@ public class ChatbotController {
 
                 context.reset();
                 return result;
+
             } catch (ParseException e) {
                 return "Data specificată nu este într-un format valid. Folosește formatul zz-ll-aaaa.";
             }
@@ -301,7 +302,7 @@ public class ChatbotController {
             SimpleDateFormat dbFormat = new SimpleDateFormat("MMM dd, yyyy", Locale.ENGLISH);
             try {
                 DebtEntity debt = new DebtEntity();
-                debt.setStatus(context.getStepData("description"));
+                debt.setStatus(context.getStepData("status"));
                 debt.setAmount(Double.parseDouble(context.getStepData("amount")));
                 debt.setUser(user);
                 debt.setMoneyFrom(context.getStepData("moneyFrom"));
